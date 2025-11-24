@@ -1,4 +1,21 @@
 package org.trostheide.watercolorprocessor.dto.command;
 
-public class RefillCommand {
+/**
+ * Represents a request to refill the brush at a specific station.
+ * @param id Sequential command ID.
+ * @param stationId The logical ID of the station (mapped in Python config).
+ */
+public final class RefillCommand extends Command {
+    public final int id;
+    public final String stationId;
+
+    public RefillCommand(int id, String stationId) {
+        this.id = id;
+        this.stationId = stationId;
+    }
+
+    @Override
+    public int getId() {
+        return id;
+    }
 }
