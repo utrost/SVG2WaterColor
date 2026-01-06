@@ -1,0 +1,14 @@
+{
+  "default_station" : {
+    "x" : 5.0,
+    "y" : 50.0,
+    "z_down" : 20,
+    "behavior" : "simple_dip"
+  },
+  "red" : {
+    "x" : 5.0,
+    "y" : 50.0,
+    "z_down" : 20,
+    "behavior" : "simple_dip"
+  }
+}

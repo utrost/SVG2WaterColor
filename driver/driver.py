@@ -65,7 +65,7 @@ def execute_layer(ad, layer):
         elif op == "DRAW":
             # DRAW command has a list of points
             print(f"  [DRAW] Polyline with {len(cmd['points'])} points")
-            points = cmd['points']
+    points = cmd['points']
             for p in points:
                 # print(f"    -> Lineto ({p['x']}, {p['y']})") # Too verbose?
                 ad.lineto(p['x'], p['y'])
@@ -75,11 +75,31 @@ def execute_layer(ad, layer):
             
     print(f"=== Layer {layer['id']} Complete ===")
 
+def load_station_config():
+    # Look for stations.json in CWD or script dir
+    paths = ["stations.json", os.path.join(os.path.dirname(__file__), "stations.json")]
+    for p in paths:
+        if os.path.exists(p):
+            print(f"INFO: Loading Station Configuration from {p}")
+            try:
+                with open(p, 'r') as f:
+                    data = json.load(f)
+                    # Merge into config.STATIONS or replace
+                    # We will replace entries
+                    for k, v in data.items():
+                        config.STATIONS[k] = v
+                return
+            except Exception as e:
+                print(f"ERROR: Failed to load stations.json: {e}")
+
 def main():
     parser = argparse.ArgumentParser(description='Watercolor Driver')
     parser.add_argument('input', help='Input JSON file')
     parser.add_argument('--mock', action='store_true', help='Force Mock Mode')
     args = parser.parse_args()
+
+    # Load Station Config Early
+    load_station_config()
 
     # Initialize Driver
     if args.mock:
