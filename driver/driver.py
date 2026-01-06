@@ -34,19 +34,19 @@ def perform_refill(ad, station_id):
     # Note: Real AD requires modifying options to change "pen_pos_down" dynamically if we want deep dips
     # For now we simulate a simple dip
     print(f"  > Dipping into {station_id}...")
-    ad.pen_down()
+    ad.pendown()
     time.sleep(0.5) # Wait for ink
-    ad.pen_up()
+    ad.penup()
     
     # 3. Wiggle/Swirl if needed
     if station.get('behavior') == 'dip_swirl':
         print("  > Swirling brush...")
         # Simulate swirl movement
-        ad.pen_down()
+        ad.pendown()
         ad.lineto(station['x'] + 2, station['y'])
         ad.lineto(station['x'] - 2, station['y'])
         ad.moveto(station['x'], station['y'])
-        ad.pen_up()
+        ad.penup()
         
     print("--- Refill Complete ---")
 
@@ -59,15 +59,15 @@ def execute_layer(ad, layer):
         op = cmd['op']
         
         if op == "MOVE":
+            print(f"  [MOVE] To ({cmd['x']}, {cmd['y']})")
             ad.moveto(cmd['x'], cmd['y'])
             
         elif op == "DRAW":
             # DRAW command has a list of points
-            # We assume we are already at the start point (handled by previous MOVE or DRAW end)
-            # But the JAVA processor sends DRAW as a PolyLine. 
-            # The first point of DRAW is usually where we are, but let's be safe.
+            print(f"  [DRAW] Polyline with {len(cmd['points'])} points")
             points = cmd['points']
             for p in points:
+                # print(f"    -> Lineto ({p['x']}, {p['y']})") # Too verbose?
                 ad.lineto(p['x'], p['y'])
                 
         elif op == "REFILL":
@@ -82,23 +82,54 @@ def main():
     args = parser.parse_args()
 
     # Initialize Driver
-    if args.mock or axidraw is None:
-        print("Initializing MOCK AxiDraw...")
+    if args.mock:
+        print("INFO: Force Mock Mode selected.")
+        ad = MockAxiDraw()
+    elif axidraw is None:
+        print("dWARNING: pyaxidraw not found. Falling back to MOCK Axidraw.")
         ad = MockAxiDraw()
     else:
-        print("Initializing REAL AxiDraw...")
+        print("INFO: Initializing REAL AxiDraw...")
         ad = axidraw.AxiDraw() 
 
-    ad.connect()
+    # Enter Interactive Context
+    print("INFO: Entering Interactive Mode...")
+    ad.interactive()
+    
+    # Attempt Connection
+    print("INFO: Connecting to AxiDraw...")
+    connected = ad.connect()
+    
+    if not connected:
+        print("ERROR: Could not connect to AxiDraw! Check USB connection and power.")
+        if not args.mock:
+            print("       Exiting...")
+            sys.exit(1)
+        else:
+            print("       Continuing because we are in Mock mode (or fell back to it).")
+
+    print("INFO: Connection Successful.")
     
     # Setup Options
+    print(f"INFO: Setting Pen Heights -> UP: {config.PEN_HEIGHTS['UP']}%, DOWN: {config.PEN_HEIGHTS['DOWN']}%")
     ad.options.pen_pos_up = config.PEN_HEIGHTS["UP"]
     ad.options.pen_pos_down = config.PEN_HEIGHTS["DOWN"]
-    ad.plot_setup()
+    
+    # Init options for interactive mode
+    print("INFO: Updating AxiDraw options...")
+    ad.update()
 
     # Load Data
+    print(f"INFO: Loading input file: {args.input}")
     data = load_json(args.input)
-    print(f"Loaded {data['metadata']['source']}. Total Layers: {len(data['layers'])}")
+    print(f"INFO: Loaded {data['metadata']['source']}. Total Layers: {len(data['layers'])}")
+
+    # Set Units based on metadata
+    if data['metadata'].get('units') == 'mm':
+        print("INFO: Configuring AxiDraw for Millimeters (units=2)...")
+        ad.options.units = 2
+        ad.update()
+
 
     try:
         for layer in data['layers']:
@@ -111,7 +142,7 @@ def main():
         
     except KeyboardInterrupt:
         print("\nAborted by User.")
-        ad.pen_up()
+        ad.penup()
         ad.disconnect()
 
 if __name__ == "__main__":

@@ -1,0 +1,37 @@
+{
+    "metadata": {
+        "source": "test_movement",
+        "stationId": "test",
+        "units": "mm",
+        "bounds": {
+            "minX": 0,
+            "minY": 0,
+            "maxX": 20,
+            "maxY": 20
+        }
+    },
+    "layers": [
+        {
+            "id": "test_layer",
+            "stationId": "default_station",
+            "commands": [
+                {
+                    "op": "MOVE",
+                    "id": 1,
+                    "x": 0,
+                    "y": 0
+                },
+                {
+                    "op": "DRAW",
+                    "id": 2,
+                    "points": [
+                        {
+                            "x": 200,
+                            "y": 0
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
