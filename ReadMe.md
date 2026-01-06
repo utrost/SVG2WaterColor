@@ -39,6 +39,15 @@ The Java application requires a configuration object (passed via CLI):
 | defaultStationId (-s) | String | Fallback Station ID used if SVG layers are unnamed or missing. |
 | curveApproximation (-c) | Double | Step size (mm) for linearizing curves. Default: 0.5. |
 
+### **2.1.1 GUI Mode (New)**
+
+Start the Swing GUI to configure parameters visually:
+```bash
+./run_gui.sh
+```
+Or manually:
+`java -cp target/watercolor-processor-1.0-SNAPSHOT.jar org.trostheide.watercolorprocessor.gui.WatercolorGUI`
+
 ### **2.2 Functional Logic**
 
 1. **Layer Identification:**
@@ -140,10 +149,29 @@ STATIONS \= {
 1. **Load JSON:** Parses the multi-layer JSON structure.
 2. **Safety Check:** Validates metadata.bounds against physical limits immediately (O(1)).
 3. **Layer Loop:**
-    * Iterates through layers.
-    * **Prompt:** Pauses and asks user to setup for station layer.stationId (Change Brush/Paint).
-    * **Command Loop:** Executes MOVE, DRAW, REFILL for that layer.
-4. **Refill Execution:**
-    * Lookup stationId in config.py.
-    * Perform physical dip sequence (Move \-\> Pen Down \-\> Wait/Swirl \-\> Pen Up).
-    * *Note:* The logic is stateless; the return move to the drawing surface is handled by the *next* command in the JSON.
+1.  **Load JSON:** Parses the multi-layer JSON structure.
+2.  **Safety Check:** Validates metadata.bounds against physical limits immediately (O(1)).
+3.  **Layer Loop:**
+    *   Iterates through layers.
+    *   **Prompt:** Pauses and asks user to setup for station layer.stationId (Change Brush/Paint).
+    *   **Command Loop:** Executes MOVE, DRAW, REFILL for that layer.
+4.  **Refill Execution:**
+    *   Lookup stationId in config.py.
+    *   Perform physical dip sequence (Move \-\> Pen Down \-\> Wait/Swirl \-\> Pen Up).
+    *   *Note:* The logic is stateless; the return move to the drawing surface is handled by the *next* command in the JSON.
+
+## **5. Windows Execution**
+
+To run the driver on a Windows machine connected to the plotter:
+
+1.  **Install Python:** Ensure `python` is in your PATH.
+2.  **Install Dependencies:**
+    ```cmd
+    pip install -r driver\requirements.txt
+    ```
+    *(Note: You may need to install the official AxiDraw software which includes the API)*
+3.  **Run the Driver:**
+    Use the provided batch script:
+    ```cmd
+    run_driver.bat simpleSampleSVG.json
+    ```

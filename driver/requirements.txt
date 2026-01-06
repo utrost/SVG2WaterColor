@@ -1,0 +1,4 @@
+# AxiDraw API (Official)
+# Install via: pip install https://cdn.evilmadscientist.com/dl/ad/public/AxiDraw_API_v3.8.0.zip
+# Or if available on PyPI (check your specific version needs)
+pyserial

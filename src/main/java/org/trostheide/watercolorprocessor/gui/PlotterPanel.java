@@ -1,0 +1,211 @@
+package org.trostheide.watercolorprocessor.gui;
+
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import javax.swing.text.DefaultCaret;
+import java.awt.*;
+import java.io.*;
+import java.util.ArrayList;
+import java.util.List;
+
+public class PlotterPanel extends JPanel {
+
+    private final JTextField jsonField;
+    private final JTextField pythonPathField;
+    private final JCheckBox mockCheckBox;
+    private final JTextArea consoleArea;
+    private final JButton startButton;
+    private final JButton stopButton;
+    private final JButton inputButton;
+
+    private Process currentProcess;
+    private BufferedWriter processInputWriter;
+
+    public PlotterPanel() {
+        setLayout(new BorderLayout());
+        setBorder(new EmptyBorder(10, 10, 10, 10));
+
+        // Top: Configuration
+        JPanel configPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+
+        // JSON File
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 0.1;
+        configPanel.add(new JLabel("JSON File:"), gbc);
+
+        gbc.gridx = 1;
+        gbc.weightx = 0.8;
+        jsonField = new JTextField();
+        configPanel.add(jsonField, gbc);
+
+        gbc.gridx = 2;
+        gbc.weightx = 0.1;
+        JButton selectJsonBtn = new JButton("Select...");
+        selectJsonBtn.addActionListener(e -> selectFile());
+        configPanel.add(selectJsonBtn, gbc);
+
+        // Python Path
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        gbc.weightx = 0.1;
+        configPanel.add(new JLabel("Python Path:"), gbc);
+
+        gbc.gridx = 1;
+        gbc.weightx = 0.8;
+        // Default to "python" but allow user to change to "python3" or absolute path
+        String defaultPython = System.getProperty("os.name").toLowerCase().contains("win") ? "python" : "python3";
+        pythonPathField = new JTextField(defaultPython);
+        configPanel.add(pythonPathField, gbc);
+
+        // Flags
+        gbc.gridx = 0;
+        gbc.gridy = 2;
+        gbc.weightx = 0.1;
+        configPanel.add(new JLabel("Options:"), gbc);
+
+        gbc.gridx = 1;
+        gbc.weightx = 0.9;
+        gbc.gridwidth = 2;
+        mockCheckBox = new JCheckBox("Mock Mode (No Hardware)", true);
+        configPanel.add(mockCheckBox, gbc);
+
+        // Center: Console Output
+        consoleArea = new JTextArea();
+        consoleArea.setEditable(false);
+        consoleArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        consoleArea.setBackground(Color.BLACK);
+        consoleArea.setForeground(Color.GREEN);
+        DefaultCaret caret = (DefaultCaret) consoleArea.getCaret();
+        caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
+
+        JScrollPane scrollPane = new JScrollPane(consoleArea);
+        scrollPane.setBorder(BorderFactory.createTitledBorder("Driver Output"));
+
+        // Bottom: Controls
+        JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        startButton = new JButton("Start Plot");
+        startButton.addActionListener(e -> startProcess());
+
+        stopButton = new JButton("Stop");
+        stopButton.setEnabled(false);
+        stopButton.addActionListener(e -> stopProcess());
+
+        inputButton = new JButton("Confirm / Press Enter");
+        inputButton.setEnabled(false);
+        inputButton.addActionListener(e -> sendInput("\n"));
+
+        controlPanel.add(startButton);
+        controlPanel.add(inputButton);
+        controlPanel.add(stopButton);
+
+        add(configPanel, BorderLayout.NORTH);
+        add(scrollPane, BorderLayout.CENTER);
+        add(controlPanel, BorderLayout.SOUTH);
+    }
+
+    private void selectFile() {
+        JFileChooser fc = new JFileChooser();
+        File current = new File(jsonField.getText());
+        if (current.exists())
+            fc.setSelectedFile(current);
+        else
+            fc.setCurrentDirectory(new File("."));
+
+        if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            jsonField.setText(fc.getSelectedFile().getAbsolutePath());
+        }
+    }
+
+    private void startProcess() {
+        String jsonPath = jsonField.getText();
+        if (jsonPath.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please select a JSON file.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        List<String> cmd = new ArrayList<>();
+        cmd.add(pythonPathField.getText());
+        cmd.add("driver/driver.py");
+        cmd.add(jsonPath);
+        if (mockCheckBox.isSelected()) {
+            cmd.add("--mock");
+        }
+
+        consoleArea.setText("");
+        appendToConsole("Starting driver...");
+        appendToConsole("Command: " + String.join(" ", cmd));
+
+        ProcessBuilder pb = new ProcessBuilder(cmd);
+        pb.redirectErrorStream(true);
+
+        try {
+            currentProcess = pb.start();
+            processInputWriter = new BufferedWriter(new OutputStreamWriter(currentProcess.getOutputStream()));
+
+            startButton.setEnabled(false);
+            stopButton.setEnabled(true);
+            inputButton.setEnabled(true);
+
+            // Output Reader Thread
+            new Thread(() -> {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(currentProcess.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        final String l = line;
+                        SwingUtilities.invokeLater(() -> appendToConsole(l));
+                    }
+                } catch (IOException e) {
+                    if (currentProcess != null && currentProcess.isAlive()) {
+                        e.printStackTrace();
+                    }
+                } finally {
+                    SwingUtilities.invokeLater(() -> {
+                        appendToConsole("--- Process Exited ---");
+                        processCleanup();
+                    });
+                }
+            }).start();
+
+        } catch (IOException e) {
+            appendToConsole("Error starting process: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private void stopProcess() {
+        if (currentProcess != null && currentProcess.isAlive()) {
+            currentProcess.destroy();
+            appendToConsole("--- Process Killed by User ---");
+        }
+        processCleanup();
+    }
+
+    private void sendInput(String input) {
+        if (currentProcess != null && currentProcess.isAlive() && processInputWriter != null) {
+            try {
+                processInputWriter.write(input);
+                processInputWriter.flush();
+                // Echo specific inputs if needed, but the driver usually echoes prompts
+            } catch (IOException e) {
+                appendToConsole("Error sending input: " + e.getMessage());
+            }
+        }
+    }
+
+    private void processCleanup() {
+        startButton.setEnabled(true);
+        stopButton.setEnabled(false);
+        inputButton.setEnabled(false);
+        currentProcess = null;
+        processInputWriter = null;
+    }
+
+    private void appendToConsole(String text) {
+        consoleArea.append(text + "\n");
+    }
+}
