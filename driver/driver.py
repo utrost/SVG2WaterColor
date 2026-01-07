@@ -50,7 +50,7 @@ def perform_refill(ad, station_id):
         
     print("--- Refill Complete ---")
 
-def execute_layer(ad, layer):
+def execute_layer(ad, layer, report_pos=False):
     print(f"\n=== Starting Layer: {layer['id']} (Station: {layer['stationId']}) ===")
     input("Press Enter to start this layer (Ensure correct paint is ready)...")
     
@@ -61,6 +61,9 @@ def execute_layer(ad, layer):
         if op == "MOVE":
             print(f"  [MOVE] To ({cmd['x']}, {cmd['y']})")
             ad.moveto(cmd['x'], cmd['y'])
+            if report_pos:
+                print(f"POS:X:{cmd['x']}:Y:{cmd['y']}")
+                sys.stdout.flush()
             
         elif op == "DRAW":
             # DRAW command has a list of points
@@ -69,6 +72,9 @@ def execute_layer(ad, layer):
             for p in points:
                 # print(f"    -> Lineto ({p['x']}, {p['y']})") # Too verbose?
                 ad.lineto(p['x'], p['y'])
+                if report_pos:
+                    print(f"POS:X:{p['x']}:Y:{p['y']}")
+                    sys.stdout.flush()
                 
         elif op == "REFILL":
             perform_refill(ad, cmd['stationId'])
@@ -98,6 +104,7 @@ def main():
     parser.add_argument('--mock', action='store_true', help='Force Mock Mode')
     parser.add_argument('--speed-down', type=int, default=25, help='Pen Down Speed (1-100)')
     parser.add_argument('--speed-up', type=int, default=75, help='Pen Up Speed (1-100)')
+    parser.add_argument('--report-position', action='store_true', help='Report realtime position for GUI')
     args = parser.parse_args()
 
     # Load Station Config Early
@@ -108,7 +115,7 @@ def main():
         print("INFO: Force Mock Mode selected.")
         ad = MockAxiDraw()
     elif axidraw is None:
-        print("dWARNING: pyaxidraw not found. Falling back to MOCK Axidraw.")
+        print("WARNING: pyaxidraw not found. Falling back to MOCK Axidraw.")
         ad = MockAxiDraw()
     else:
         print("INFO: Initializing REAL AxiDraw...")
@@ -159,7 +166,7 @@ def main():
 
     try:
         for layer in data['layers']:
-            execute_layer(ad, layer)
+            execute_layer(ad, layer, report_pos=args.report_position)
             
         # Return to home
         print("\nPlot Complete. Returning Home.")
