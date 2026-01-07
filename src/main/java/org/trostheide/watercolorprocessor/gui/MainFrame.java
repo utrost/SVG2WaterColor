@@ -23,11 +23,13 @@ public class MainFrame extends JFrame {
         // Create Panels
         ProcessorPanel processorPanel = new ProcessorPanel(statusArea);
         PlotterPanel plotterPanel = new PlotterPanel();
+        StationEditorPanel stationPanel = new StationEditorPanel();
 
         // Tabs
         JTabbedPane tabbedPane = new JTabbedPane();
         tabbedPane.addTab("1. Process SVG", processorPanel);
         tabbedPane.addTab("2. Plot (Driver)", plotterPanel);
+        tabbedPane.addTab("3. Configure Stations", stationPanel);
 
         // Layout
         // The Processor panel needs the shared status area below it,

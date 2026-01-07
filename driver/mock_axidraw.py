@@ -3,9 +3,16 @@ class AxiDraw:
         self.connected = False
         self.options = MockOptions()
 
+    def interactive(self):
+        print("[Mock] Entering Interactive Mode.")
+
+    def update(self):
+        print("[Mock] Updating Options.")
+
     def connect(self):
         print("[Mock] AxiDraw Connected.")
         self.connected = True
+        return True # Simulate successful connection
 
     def disconnect(self):
         print("[Mock] AxiDraw Disconnected.")
@@ -20,10 +27,10 @@ class AxiDraw:
     def lineto(self, x, y):
         print(f"[Mock] Drawing line to ({x:.2f}, {y:.2f}) [Pen DOWN]")
 
-    def pen_up(self):
+    def penup(self):
         print("[Mock] Pen UP")
 
-    def pen_down(self):
+    def pendown(self):
         print("[Mock] Pen DOWN")
 
 class MockOptions:
@@ -33,3 +40,4 @@ class MockOptions:
         self.accel = 50
         self.pen_pos_up = 60
         self.pen_pos_down = 30
+        self.units = 0 # 0=inches, 1=cm, 2=mm

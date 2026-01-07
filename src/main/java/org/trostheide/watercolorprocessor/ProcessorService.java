@@ -38,7 +38,8 @@ public class ProcessorService {
         this.objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
     }
 
-    public void process(File inputFile, File outputFile, double maxDrawDistance, String defaultStationId, double curveApproximation) {
+    public void process(File inputFile, File outputFile, double maxDrawDistance, String defaultStationId,
+            double curveApproximation) {
         logger.info("Starting processing for: {}", inputFile.getName());
 
         try {
@@ -69,8 +70,7 @@ public class ProcessorService {
                         curveApproximation,
                         pathParser,
                         pathProducer,
-                        globalBounds
-                );
+                        globalBounds);
 
                 if (!layerCommands.isEmpty()) {
                     resultLayers.add(new Layer(ctx.layerName, ctx.stationId, layerCommands));
@@ -87,8 +87,7 @@ public class ProcessorService {
                     "MULTI_LAYER", // Station ID is now per-layer
                     "mm",
                     totalCommands,
-                    globalBounds.build()
-            );
+                    globalBounds.build());
 
             ProcessorOutput output = new ProcessorOutput(metadata, resultLayers);
 
@@ -105,7 +104,8 @@ public class ProcessorService {
 
     // --- Layer Identification ---
 
-    private record LayerProcessingContext(String layerName, String stationId, Element rootNode) {}
+    private record LayerProcessingContext(String layerName, String stationId, Element rootNode) {
+    }
 
     private List<LayerProcessingContext> identifyLayers(Document doc, String defaultStationId) {
         List<LayerProcessingContext> contexts = new ArrayList<>();
@@ -126,16 +126,20 @@ public class ProcessorService {
                         label = g.getAttributeNS("http://www.inkscape.org/namespaces/inkscape", "label");
                     }
 
-                    // Use label as station ID, fallback to default if missing, or generic name if fallback is irrelevant
-                    String stationId = (label != null && !label.isEmpty()) ? label : defaultStationId;
-                    String layerName = (label != null && !label.isEmpty()) ? label : "Layer_" + (contexts.size() + 1);
+                    // Renaming Strategy: User wants generic Layer1, Layer2... regardless of
+                    // Inkscape label.
+                    // The label is still useful for logging/debugging.
+                    String genericId = "Layer" + (contexts.size() + 1);
+                    String stationId = genericId;
+                    String layerName = (label != null && !label.isEmpty()) ? label + " (" + genericId + ")" : genericId;
 
                     contexts.add(new LayerProcessingContext(layerName, stationId, g));
                 }
             }
         }
 
-        // Fallback: If no explicit layers found, treat the whole document root as one layer
+        // Fallback: If no explicit layers found, treat the whole document root as one
+        // layer
         if (contexts.isEmpty()) {
             logger.info("No explicit Inkscape layers found. Processing entire document as default layer.");
             contexts.add(new LayerProcessingContext("Default", defaultStationId, root));
@@ -146,13 +150,15 @@ public class ProcessorService {
 
     // --- Core Generation Logic ---
 
-    private List<Command> generateCommandsForLayer(Element layerRoot, String stationId, double maxDist, double curveStep,
-                                                   PathParser parser, AWTPathProducer producer, BoundsBuilder bounds) {
+    private List<Command> generateCommandsForLayer(Element layerRoot, String stationId, double maxDist,
+            double curveStep,
+            PathParser parser, AWTPathProducer producer, BoundsBuilder bounds) {
         List<Command> cmds = new ArrayList<>();
         List<Node> drawables = new ArrayList<>();
         collectDrawableElements(layerRoot, drawables);
 
-        if (drawables.isEmpty()) return cmds;
+        if (drawables.isEmpty())
+            return cmds;
 
         // Initial Refill for this layer
         cmds.add(new RefillCommand(commandCounter++, stationId));
@@ -160,7 +166,8 @@ public class ProcessorService {
 
         for (Node node : drawables) {
             String d = getRawPathData(node);
-            if (d == null) continue;
+            if (d == null)
+                continue;
 
             parser.parse(d);
             Shape shape = producer.getShape();
@@ -252,7 +259,8 @@ public class ProcessorService {
     private void finishStroke(List<Command> cmds, List<Point> stroke, BoundsBuilder bounds) {
         DrawCommand dc = new DrawCommand(commandCounter++, new ArrayList<>(stroke));
         cmds.add(dc);
-        for(Point p : stroke) bounds.add(p.x(), p.y());
+        for (Point p : stroke)
+            bounds.add(p.x(), p.y());
         stroke.clear();
     }
 
@@ -269,41 +277,51 @@ public class ProcessorService {
             }
         }
         NodeList children = node.getChildNodes();
-        for (int i = 0; i < children.getLength(); i++) collectDrawableElements(children.item(i), result);
+        for (int i = 0; i < children.getLength(); i++)
+            collectDrawableElements(children.item(i), result);
     }
 
     private String getRawPathData(Node node) {
-        if (node.getNodeType() != Node.ELEMENT_NODE) return null;
+        if (node.getNodeType() != Node.ELEMENT_NODE)
+            return null;
         Element el = (Element) node;
         String tagName = el.getTagName();
 
         if (el.hasAttribute("transform")) {
-            // Warn once per element but skip to avoid complex matrix math implementation in this iteration
+            // Warn once per element but skip to avoid complex matrix math implementation in
+            // this iteration
             logger.warn("Skipping transformed element '{}'. Convert to path in Inkscape first.", tagName);
             return null;
         }
 
         try {
-            if ("path".equals(tagName)) return el.getAttribute("d");
+            if ("path".equals(tagName))
+                return el.getAttribute("d");
 
             if ("rect".equals(tagName)) {
-                double x = d(el, "x"); double y = d(el, "y");
-                double w = d(el, "width"); double h = d(el, "height");
-                return String.format("M%f %f L%f %f L%f %f L%f %f Z", x, y, x+w, y, x+w, y+h, x, y+h);
+                double x = d(el, "x");
+                double y = d(el, "y");
+                double w = d(el, "width");
+                double h = d(el, "height");
+                return String.format("M%f %f L%f %f L%f %f L%f %f Z", x, y, x + w, y, x + w, y + h, x, y + h);
             }
 
             if ("circle".equals(tagName)) {
-                double cx = d(el, "cx"); double cy = d(el, "cy"); double r = d(el, "r");
+                double cx = d(el, "cx");
+                double cy = d(el, "cy");
+                double r = d(el, "r");
                 // Two arcs to make a circle
                 return String.format("M %f %f A %f %f 0 1 0 %f %f A %f %f 0 1 0 %f %f Z",
-                        cx-r, cy, r, r, cx+r, cy, r, r, cx-r, cy);
+                        cx - r, cy, r, r, cx + r, cy, r, r, cx - r, cy);
             }
 
             if ("ellipse".equals(tagName)) {
-                double cx = d(el, "cx"); double cy = d(el, "cy");
-                double rx = d(el, "rx"); double ry = d(el, "ry");
+                double cx = d(el, "cx");
+                double cy = d(el, "cy");
+                double rx = d(el, "rx");
+                double ry = d(el, "ry");
                 return String.format("M %f %f A %f %f 0 1 0 %f %f A %f %f 0 1 0 %f %f Z",
-                        cx-rx, cy, rx, ry, cx+rx, cy, rx, ry, cx-rx, cy);
+                        cx - rx, cy, rx, ry, cx + rx, cy, rx, ry, cx - rx, cy);
             }
 
             if ("line".equals(tagName)) {
@@ -312,23 +330,26 @@ public class ProcessorService {
 
             if ("polyline".equals(tagName) || "polygon".equals(tagName)) {
                 String points = el.getAttribute("points").trim();
-                if (points.isEmpty()) return null;
+                if (points.isEmpty())
+                    return null;
                 // Simple conversion: points="x1,y1 x2,y2" -> M x1 y1 L x2 y2 ...
                 // Note: This is a naive regex replacement for demonstration.
                 // Ideally parse numbers, but Batik PathParser expects standard path commands.
                 // We'll assume space/comma separation.
                 String[] pts = points.split("[\\s,]+");
-                if (pts.length < 2) return null;
+                if (pts.length < 2)
+                    return null;
 
                 StringBuilder sb = new StringBuilder("M ").append(pts[0]).append(" ").append(pts[1]);
-                for (int i = 2; i < pts.length - 1; i+=2) {
-                    sb.append(" L ").append(pts[i]).append(" ").append(pts[i+1]);
+                for (int i = 2; i < pts.length - 1; i += 2) {
+                    sb.append(" L ").append(pts[i]).append(" ").append(pts[i + 1]);
                 }
-                if ("polygon".equals(tagName)) sb.append(" Z");
+                if ("polygon".equals(tagName))
+                    sb.append(" Z");
                 return sb.toString();
             }
 
-        } catch(Exception e) {
+        } catch (Exception e) {
             logger.warn("Failed to convert primitive '{}' to path: {}", tagName, e.getMessage());
             return null;
         }
@@ -345,7 +366,8 @@ public class ProcessorService {
     }
 
     private Point interpolate(Point start, Point end, double distToTravel, double totalDist) {
-        if (totalDist == 0) return start;
+        if (totalDist == 0)
+            return start;
         double ratio = distToTravel / totalDist;
         return new Point(start.x() + (end.x() - start.x()) * ratio, start.y() + (end.y() - start.y()) * ratio);
     }
@@ -355,14 +377,21 @@ public class ProcessorService {
         double minY = Double.MAX_VALUE;
         double maxX = Double.MIN_VALUE;
         double maxY = Double.MIN_VALUE;
+
         void add(double x, double y) {
-            if (x < minX) minX = x;
-            if (y < minY) minY = y;
-            if (x > maxX) maxX = x;
-            if (y > maxY) maxY = y;
+            if (x < minX)
+                minX = x;
+            if (y < minY)
+                minY = y;
+            if (x > maxX)
+                maxX = x;
+            if (y > maxY)
+                maxY = y;
         }
+
         Bounds build() {
-            if (minX == Double.MAX_VALUE) return Bounds.empty();
+            if (minX == Double.MAX_VALUE)
+                return Bounds.empty();
             return new Bounds(minX, minY, maxX, maxY);
         }
     }
