@@ -288,6 +288,15 @@ public class PlotterPanel extends JPanel {
         startButton.setEnabled(true);
         stopButton.setEnabled(false);
         inputButton.setEnabled(false);
+
+        // Re-enable config
+        mockCheckBox.setEnabled(true);
+        verboseCheckBox.setEnabled(true);
+        modelComboBox.setEnabled(true);
+        speedDownSpinner.setEnabled(true);
+        speedUpSpinner.setEnabled(true);
+        pythonPathField.setEnabled(true);
+
         currentProcess = null;
         processInputWriter = null;
     }
