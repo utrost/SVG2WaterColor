@@ -50,10 +50,15 @@ def perform_refill(ad, station_id):
         
     print("--- Refill Complete ---")
 
-def execute_layer(ad, layer, report_pos=False):
+def execute_layer(ad, layer, report_pos=False, verbose=False, model=1):
     print(f"\n=== Starting Layer: {layer['id']} (Station: {layer['stationId']}) ===")
     input("Press Enter to start this layer (Ensure correct paint is ready)...")
     
+    # Model 1 (V3 A4): X ~300, Y ~218
+    # Model 2 (V3 A3): X ~430, Y ~297
+    maxX = 300.0 if model == 1 else 430.0
+    maxY = 215.0 if model == 1 else 297.0
+
     commands = layer['commands']
     for cmd in commands:
         op = cmd['op']
@@ -70,7 +75,11 @@ def execute_layer(ad, layer, report_pos=False):
             print(f"  [DRAW] Polyline with {len(cmd['points'])} points")
             points = cmd['points']
             for p in points:
-                # print(f"    -> Lineto ({p['x']}, {p['y']})") # Too verbose?
+                if verbose:
+                    print(f"    -> Lineto ({p['x']:.2f}, {p['y']:.2f})")
+                    if p['y'] > maxY or p['x'] > maxX:
+                        print(f"       [WARNING] Coordinate out of bounds for Model {model} (Max: {maxX}x{maxY})!")
+                
                 ad.lineto(p['x'], p['y'])
                 if report_pos:
                     print(f"POS:X:{p['x']}:Y:{p['y']}")
@@ -102,6 +111,8 @@ def main():
     parser = argparse.ArgumentParser(description='Watercolor Driver')
     parser.add_argument('input', help='Input JSON file')
     parser.add_argument('--mock', action='store_true', help='Force Mock Mode')
+    parser.add_argument('--verbose', action='store_true', help='Enable verbose logging')
+    parser.add_argument('--model', type=int, default=1, help='AxiDraw Model (1=A4, 2=A3/XL)')
     parser.add_argument('--speed-down', type=int, default=25, help='Pen Down Speed (1-100)')
     parser.add_argument('--speed-up', type=int, default=75, help='Pen Up Speed (1-100)')
     parser.add_argument('--report-position', action='store_true', help='Report realtime position for GUI')
@@ -143,6 +154,10 @@ def main():
     print(f"INFO: Setting Pen Heights -> UP: {config.PEN_HEIGHTS['UP']}%, DOWN: {config.PEN_HEIGHTS['DOWN']}%")
     ad.options.pen_pos_up = config.PEN_HEIGHTS["UP"]
     ad.options.pen_pos_down = config.PEN_HEIGHTS["DOWN"]
+    try:
+        ad.options.model = args.model
+    except:
+        pass # Mock might not have it, or old lib
 
     print(f"INFO: Setting Speeds -> Draw: {args.speed_down}%, Travel: {args.speed_up}%")
     ad.options.speed_pendown = args.speed_down
@@ -166,7 +181,7 @@ def main():
 
     try:
         for layer in data['layers']:
-            execute_layer(ad, layer, report_pos=args.report_position)
+            execute_layer(ad, layer, report_pos=args.report_position, verbose=args.verbose, model=args.model)
             
         # Return to home
         print("\nPlot Complete. Returning Home.")

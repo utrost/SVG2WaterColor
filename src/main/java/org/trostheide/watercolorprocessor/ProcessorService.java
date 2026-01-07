@@ -303,7 +303,8 @@ public class ProcessorService {
                 double y = d(el, "y");
                 double w = d(el, "width");
                 double h = d(el, "height");
-                return String.format("M%f %f L%f %f L%f %f L%f %f Z", x, y, x + w, y, x + w, y + h, x, y + h);
+                return String.format(java.util.Locale.US, "M%f %f L%f %f L%f %f L%f %f Z", x, y, x + w, y, x + w, y + h,
+                        x, y + h);
             }
 
             if ("circle".equals(tagName)) {
@@ -311,7 +312,7 @@ public class ProcessorService {
                 double cy = d(el, "cy");
                 double r = d(el, "r");
                 // Two arcs to make a circle
-                return String.format("M %f %f A %f %f 0 1 0 %f %f A %f %f 0 1 0 %f %f Z",
+                return String.format(java.util.Locale.US, "M %f %f A %f %f 0 1 0 %f %f A %f %f 0 1 0 %f %f Z",
                         cx - r, cy, r, r, cx + r, cy, r, r, cx - r, cy);
             }
 
@@ -320,12 +321,13 @@ public class ProcessorService {
                 double cy = d(el, "cy");
                 double rx = d(el, "rx");
                 double ry = d(el, "ry");
-                return String.format("M %f %f A %f %f 0 1 0 %f %f A %f %f 0 1 0 %f %f Z",
+                return String.format(java.util.Locale.US, "M %f %f A %f %f 0 1 0 %f %f A %f %f 0 1 0 %f %f Z",
                         cx - rx, cy, rx, ry, cx + rx, cy, rx, ry, cx - rx, cy);
             }
 
             if ("line".equals(tagName)) {
-                return String.format("M %f %f L %f %f", d(el, "x1"), d(el, "y1"), d(el, "x2"), d(el, "y2"));
+                return String.format(java.util.Locale.US, "M %f %f L %f %f", d(el, "x1"), d(el, "y1"), d(el, "x2"),
+                        d(el, "y2"));
             }
 
             if ("polyline".equals(tagName) || "polygon".equals(tagName)) {

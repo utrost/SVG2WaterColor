@@ -12,7 +12,9 @@ public class PlotterPanel extends JPanel {
 
     private final JTextField jsonField;
     private final JTextField pythonPathField;
+    private final JComboBox<String> modelComboBox;
     private final JCheckBox mockCheckBox;
+    private final JCheckBox verboseCheckBox;
     private final JSpinner speedDownSpinner;
     private final JSpinner speedUpSpinner;
     private final JTextArea consoleArea;
@@ -64,21 +66,37 @@ public class PlotterPanel extends JPanel {
         pythonPathField = new JTextField(defaultPython);
         configPanel.add(pythonPathField, gbc);
 
-        // Flags
+        // Model Selection
         gbc.gridx = 0;
         gbc.gridy = 2;
+        gbc.weightx = 0.1;
+        configPanel.add(new JLabel("Plotter Size:"), gbc);
+
+        gbc.gridx = 1;
+        gbc.weightx = 0.8;
+        modelComboBox = new JComboBox<>(new String[] { "Standard (A4 / V3)", "Large (A3 / V3 XL)" });
+        configPanel.add(modelComboBox, gbc);
+
+        // Flags
+        gbc.gridx = 0;
+        gbc.gridy = 3;
         gbc.weightx = 0.1;
         configPanel.add(new JLabel("Options:"), gbc);
 
         gbc.gridx = 1;
         gbc.weightx = 0.9;
         gbc.gridwidth = 2;
+        JPanel checkBoxPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         mockCheckBox = new JCheckBox("Mock Mode (No Hardware)", true);
-        configPanel.add(mockCheckBox, gbc);
+        checkBoxPanel.add(mockCheckBox);
+        checkBoxPanel.add(Box.createHorizontalStrut(15)); // Spacer
+        verboseCheckBox = new JCheckBox("Verbose Logging", true); // Default TRUE for debugging
+        checkBoxPanel.add(verboseCheckBox);
+        configPanel.add(checkBoxPanel, gbc);
 
         // Speed Controls
         gbc.gridwidth = 1;
-        gbc.gridy = 3;
+        gbc.gridy = 4;
 
         gbc.gridx = 0;
         configPanel.add(new JLabel("Draw Speed (%):"), gbc);
@@ -165,6 +183,13 @@ public class PlotterPanel extends JPanel {
         if (mockCheckBox.isSelected()) {
             cmd.add("--mock");
         }
+        if (verboseCheckBox.isSelected()) {
+            cmd.add("--verbose");
+        }
+
+        cmd.add("--model");
+        // Index 0 -> Model 1 (A4), Index 1 -> Model 2 (A3)
+        cmd.add(String.valueOf(modelComboBox.getSelectedIndex() + 1));
 
         cmd.add("--speed-down");
         cmd.add(speedDownSpinner.getValue().toString());
@@ -190,6 +215,8 @@ public class PlotterPanel extends JPanel {
 
             // Disable config while running
             mockCheckBox.setEnabled(false);
+            verboseCheckBox.setEnabled(false);
+            modelComboBox.setEnabled(false);
             speedDownSpinner.setEnabled(false);
             speedUpSpinner.setEnabled(false);
             pythonPathField.setEnabled(false);
