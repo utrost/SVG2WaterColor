@@ -65,7 +65,7 @@ def execute_layer(ad, layer):
         elif op == "DRAW":
             # DRAW command has a list of points
             print(f"  [DRAW] Polyline with {len(cmd['points'])} points")
-    points = cmd['points']
+            points = cmd['points']
             for p in points:
                 # print(f"    -> Lineto ({p['x']}, {p['y']})") # Too verbose?
                 ad.lineto(p['x'], p['y'])
@@ -96,6 +96,8 @@ def main():
     parser = argparse.ArgumentParser(description='Watercolor Driver')
     parser.add_argument('input', help='Input JSON file')
     parser.add_argument('--mock', action='store_true', help='Force Mock Mode')
+    parser.add_argument('--speed-down', type=int, default=25, help='Pen Down Speed (1-100)')
+    parser.add_argument('--speed-up', type=int, default=75, help='Pen Up Speed (1-100)')
     args = parser.parse_args()
 
     # Load Station Config Early
@@ -134,6 +136,10 @@ def main():
     print(f"INFO: Setting Pen Heights -> UP: {config.PEN_HEIGHTS['UP']}%, DOWN: {config.PEN_HEIGHTS['DOWN']}%")
     ad.options.pen_pos_up = config.PEN_HEIGHTS["UP"]
     ad.options.pen_pos_down = config.PEN_HEIGHTS["DOWN"]
+
+    print(f"INFO: Setting Speeds -> Draw: {args.speed_down}%, Travel: {args.speed_up}%")
+    ad.options.speed_pendown = args.speed_down
+    ad.options.speed_penup = args.speed_up
     
     # Init options for interactive mode
     print("INFO: Updating AxiDraw options...")

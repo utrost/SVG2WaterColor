@@ -13,6 +13,8 @@ public class PlotterPanel extends JPanel {
     private final JTextField jsonField;
     private final JTextField pythonPathField;
     private final JCheckBox mockCheckBox;
+    private final JSpinner speedDownSpinner;
+    private final JSpinner speedUpSpinner;
     private final JTextArea consoleArea;
     private final JButton startButton;
     private final JButton stopButton;
@@ -72,6 +74,23 @@ public class PlotterPanel extends JPanel {
         gbc.gridwidth = 2;
         mockCheckBox = new JCheckBox("Mock Mode (No Hardware)", true);
         configPanel.add(mockCheckBox, gbc);
+
+        // Speed Controls
+        gbc.gridwidth = 1;
+        gbc.gridy = 3;
+
+        gbc.gridx = 0;
+        configPanel.add(new JLabel("Draw Speed (%):"), gbc);
+        gbc.gridx = 1;
+        speedDownSpinner = new JSpinner(new SpinnerNumberModel(25, 1, 100, 1));
+        configPanel.add(speedDownSpinner, gbc);
+
+        gbc.gridx = 2;
+        JPanel speedUpPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        speedUpPanel.add(new JLabel(" Travel (%): "));
+        speedUpSpinner = new JSpinner(new SpinnerNumberModel(75, 1, 100, 1));
+        speedUpPanel.add(speedUpSpinner);
+        configPanel.add(speedUpPanel, gbc);
 
         // Center: Console Output
         consoleArea = new JTextArea();
@@ -134,6 +153,11 @@ public class PlotterPanel extends JPanel {
         if (mockCheckBox.isSelected()) {
             cmd.add("--mock");
         }
+
+        cmd.add("--speed-down");
+        cmd.add(speedDownSpinner.getValue().toString());
+        cmd.add("--speed-up");
+        cmd.add(speedUpSpinner.getValue().toString());
 
         consoleArea.setText("");
         appendToConsole("Starting driver...");
