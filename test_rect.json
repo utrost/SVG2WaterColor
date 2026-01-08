@@ -1,0 +1,36 @@
+{
+    "layers": [
+        {
+            "id": "Test Rectangle",
+            "stationId": "default",
+            "commands": [
+                {
+                    "op": "MOVE",
+                    "x": 0,
+                    "y": 0
+                },
+                {
+                    "op": "DRAW",
+                    "points": [
+                        {
+                            "x": 20,
+                            "y": 0
+                        },
+                        {
+                            "x": 20,
+                            "y": 50
+                        },
+                        {
+                            "x": 0,
+                            "y": 50
+                        },
+                        {
+                            "x": 0,
+                            "y": 0
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

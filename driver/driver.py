@@ -50,7 +50,7 @@ def perform_refill(ad, station_id):
         
     print("--- Refill Complete ---")
 
-def execute_layer(ad, layer, report_pos=False, verbose=False, model=1):
+def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=False, swap_xy=False):
     print(f"\n=== Starting Layer: {layer['id']} (Station: {layer['stationId']}) ===")
     input("Press Enter to start this layer (Ensure correct paint is ready)...")
     
@@ -59,30 +59,45 @@ def execute_layer(ad, layer, report_pos=False, verbose=False, model=1):
     maxX = 300.0 if model == 1 else 430.0
     maxY = 215.0 if model == 1 else 297.0
 
+    def transform_point(tx, ty):
+        # 1. Swap if requested
+        if swap_xy:
+            px, py = ty, tx
+        else:
+            px, py = tx, ty
+            
+        # 2. Invert Physical X if requested
+        if invert_x:
+            px = maxX - px
+            
+        return px, py
+
     commands = layer['commands']
     for cmd in commands:
         op = cmd['op']
         
         if op == "MOVE":
-            print(f"  [MOVE] To ({cmd['x']}, {cmd['y']})")
-            ad.moveto(cmd['x'], cmd['y'])
+            px, py = transform_point(cmd['x'], cmd['y'])
+            print(f"  [MOVE] To ({px:.2f}, {py:.2f}) [Orig: ({cmd['x']}, {cmd['y']})]")
+            ad.moveto(px, py)
             if report_pos:
-                print(f"POS:X:{cmd['x']}:Y:{cmd['y']}")
+                print(f"POS:X:{px}:Y:{py}")
                 sys.stdout.flush()
             
         elif op == "DRAW":
-            # DRAW command has a list of points
             print(f"  [DRAW] Polyline with {len(cmd['points'])} points")
             points = cmd['points']
             for p in points:
+                px, py = transform_point(p['x'], p['y'])
+                
                 if verbose:
-                    print(f"    -> Lineto ({p['x']:.2f}, {p['y']:.2f})")
-                    if p['y'] > maxY or p['x'] > maxX:
+                    print(f"    -> Lineto ({px:.2f}, {py:.2f})")
+                    if py > maxY or px > maxX: 
                         print(f"       [WARNING] Coordinate out of bounds for Model {model} (Max: {maxX}x{maxY})!")
                 
-                ad.lineto(p['x'], p['y'])
+                ad.lineto(px, py)
                 if report_pos:
-                    print(f"POS:X:{p['x']}:Y:{p['y']}")
+                    print(f"POS:X:{px}:Y:{py}")
                     sys.stdout.flush()
                 
         elif op == "REFILL":
@@ -110,6 +125,8 @@ def load_station_config():
 def main():
     parser = argparse.ArgumentParser(description='Watercolor Driver')
     parser.add_argument('input', nargs='?', help='Input JSON file (optional if --manual-pen used)')
+    parser.add_argument('--invert-x', action='store_true', help='Invert X Axis (Mirror Plot) for standard SVGs')
+    parser.add_argument('--swap-xy', action='store_true', help='Swap X and Y Axis')
     parser.add_argument('--mock', action='store_true', help='Force Mock Mode')
     parser.add_argument('--verbose', action='store_true', help='Enable verbose logging')
     parser.add_argument('--model', type=int, default=1, help='AxiDraw Model (1=A4, 2=A3/XL)')
@@ -118,6 +135,9 @@ def main():
     parser.add_argument('--pen-up', type=int, help='Pen Up Height (0-100)')
     parser.add_argument('--pen-down', type=int, help='Pen Down Height (0-100)')
     parser.add_argument('--manual-pen', choices=['UP', 'DOWN'], help='Manually move pen and exit')
+    parser.add_argument('--move-x', type=float, help='Manual Move X (mm)')
+    parser.add_argument('--move-y', type=float, help='Manual Move Y (mm)')
+    parser.add_argument('--interactive-server', action='store_true', help='Run in persistent server mode for manual control')
     parser.add_argument('--report-position', action='store_true', help='Report realtime position for GUI')
     args = parser.parse_args()
 
@@ -134,6 +154,10 @@ def main():
     else:
         print("INFO: Initializing REAL AxiDraw...")
         ad = axidraw.AxiDraw() 
+        
+    # Ensure Global Units are MM
+    ad.options.units = 2
+    ad.update()
 
     # Enter Interactive Context
     print("INFO: Entering Interactive Mode...")
@@ -175,9 +199,16 @@ def main():
     ad.options.speed_pendown = args.speed_down
     ad.options.speed_penup = args.speed_up
     
+    # FORCE UNITS TO MM (2)
+    # 0=Inches, 1=cm, 2=mm
+    ad.options.units = 2
+    
     # Init options for interactive mode
     print("INFO: Updating AxiDraw options...")
     ad.update()
+    
+    # Verify Units
+    print(f"DEBUG: ad.options.units is now {ad.options.units}")
 
     # Safety: Always raise pen on connect/start
     print("INFO: Safely raising pen...")
@@ -195,25 +226,115 @@ def main():
         ad.disconnect()
         return
 
-    if not args.input:
-        print("ERROR: Input file is required unless using --manual-pen")
-        sys.exit(1)
-
-    # Load Data
-    print(f"INFO: Loading input file: {args.input}")
-    data = load_json(args.input)
-    print(f"INFO: Loaded {data['metadata']['source']}. Total Layers: {len(data['layers'])}")
-
-    # Set Units based on metadata
-    if data['metadata'].get('units') == 'mm':
-        print("INFO: Configuring AxiDraw for Millimeters (units=2)...")
-        ad.options.units = 2
+    # Manual Move Check
+    if args.move_x is not None or args.move_y is not None:
+        mx = args.move_x if args.move_x is not None else 0.0
+        my = args.move_y if args.move_y is not None else 0.0
+        print(f"INFO: Manual Move -> X: {mx} mm, Y: {my} mm")
+        
+        # Ensure units are mm
+        ad.options.units = 2 
         ad.update()
 
+        # Perform move (relative from 0,0 where 0,0 is current pos)
+        ad.moveto(mx, my)
+        
+        print("INFO: Manual move complete. Exiting.")
+        ad.disconnect()
+        return
+
+    # Interactive Server Mode
+    if args.interactive_server:
+        print("INFO: Starting Interactive Server Mode...")
+        # Ensure units are mm
+        ad.options.units = 2 
+        ad.update()
+        
+        # Track position (Assumes starting at 0,0)
+        curr_x = 0.0
+        curr_y = 0.0
+        
+        print("SERVER_READY")
+        sys.stdout.flush()
+        
+        try:
+            while True:
+                line = sys.stdin.readline()
+                if not line:
+                    break
+                line = line.strip()
+                if not line:
+                    continue
+                
+                parts = line.split()
+                cmd = parts[0].upper()
+                
+                if cmd == "MOVE":
+                    # MOVE <dX> <dY>
+                    try:
+                        dx = float(parts[1])
+                        dy = float(parts[2])
+                        # Use relative move directly
+                        # ad.move(dx, dy) raises pen and moves
+                        # To ensure pen state (usually manual moves want pen up unless specified?)
+                        # The user just said "move", so we assume travel/jog.
+                        
+                        if args.swap_xy:
+                            dx, dy = dy, dx
+
+                        print(f"INFO: Moving relative ({dx}, {dy})")
+                        ad.move(dx, dy)
+                        print("OK")
+                    except ValueError:
+                        print(f"ERR Invalid Number Format: {parts}")
+                    except Exception as e:
+                        print(f"ERR {e}")
+
+                elif cmd == "PEN":
+                    # PEN <UP|DOWN>
+                    try:
+                        sub = parts[1].upper()
+                        if sub == "UP":
+                            print("INFO: Pen UP")
+                            ad.penup()
+                            print("OK")
+                        elif sub == "DOWN":
+                            print("INFO: Pen DOWN")
+                            ad.pendown()
+                            print("OK")
+                        else:
+                            print(f"ERR Invalid Pen Command: {sub}")
+                    except IndexError:
+                        print("ERR Missing Pen Argument")
+                    except Exception as e:
+                        print(f"ERR {e}")
+
+                elif cmd == "EXIT":
+                    break
+                else:
+                    print(f"ERR Unknown command: {cmd}")
+                
+                sys.stdout.flush()
+                
+        except KeyboardInterrupt:
+            pass
+            
+        print("INFO: Interactive Server Exiting.")
+        ad.disconnect()
+        return
+
+
+    if args.input:
+        data = load_json(args.input)
+        print(f"INFO: Plot Configuration -> Invert X: {args.invert_x}, Swap X/Y: {args.swap_xy}")
+    elif not args.interactive_server and not args.manual_pen:
+        print("ERROR: No input file specified for plot mode.")
+        sys.exit(1)
 
     try:
+        print(f"DEBUG: ad.options.units = {ad.options.units} (Should be 2 for mm)")
         for layer in data['layers']:
-            execute_layer(ad, layer, report_pos=args.report_position, verbose=args.verbose, model=args.model)
+            execute_layer(ad, layer, report_pos=args.report_position, verbose=args.verbose, model=args.model, invert_x=args.invert_x, swap_xy=args.swap_xy)
             
         # Return to home
         print("\nPlot Complete. Returning Home.")

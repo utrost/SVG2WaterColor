@@ -33,6 +33,12 @@ class AxiDraw:
     def pendown(self):
         print("[Mock] Pen DOWN")
 
+    def move(self, dx, dy):
+        print(f"[Mock] Relative Move ({dx:.2f}, {dy:.2f}) [Pen UP]")
+
+    def line(self, dx, dy):
+        print(f"[Mock] Relative Line ({dx:.2f}, {dy:.2f}) [Pen DOWN]")
+
 class MockOptions:
     def __init__(self):
         self.speed_penup = 75

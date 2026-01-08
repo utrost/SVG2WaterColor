@@ -24,6 +24,19 @@ public class VisualizationPanel extends JPanel {
     // Bounds for scaling
     private double minX = 0, minY = 0, maxX = 300, maxY = 300; // Default A4/A3-ish range
 
+    private boolean invertX = false;
+    private boolean swapXY = false;
+
+    public void setInvertX(boolean invertX) {
+        this.invertX = invertX;
+        repaint();
+    }
+
+    public void setSwapXY(boolean swapXY) {
+        this.swapXY = swapXY;
+        repaint();
+    }
+
     public VisualizationPanel() {
         setBackground(Color.WHITE);
         setBorder(BorderFactory.createTitledBorder("Live View"));
@@ -88,6 +101,13 @@ public class VisualizationPanel extends JPanel {
         // Calculate Scale
         double dataW = maxX - minX;
         double dataH = maxY - minY;
+
+        if (swapXY) {
+            double tmp = dataW;
+            dataW = dataH;
+            dataH = tmp;
+        }
+
         if (dataW <= 0)
             dataW = 1;
         if (dataH <= 0)
@@ -105,6 +125,38 @@ public class VisualizationPanel extends JPanel {
         g2.translate(tx, ty);
         g2.scale(scale, scale);
 
+        if (invertX) {
+            // If Inverted, we mirror effectively.
+            // But we want to represent the Machine View where (0,0) is Top Right.
+            // Standard: (0,0) at Top-Left.
+            // If Machine (0,0) is Top-Right, then a coordinate of 10 is near the right
+            // edge.
+            // But we are drawing logical paths.
+            // The physical moves received (currentX) are large values if inverted logic was
+            // used in driver?
+            // Actually, if we use "--invert-x", the driver calculates 'px = maxX - lx'.
+            // So logical 0 becomes physical 430.
+            // The driver reports 'px' (430).
+            // If we draw a point at 430, it is at the "Bottom" (or Right) of the panel.
+            // This matches Top-Left Origin logic: 0 is Left, 430 is Right.
+            // BUT, user says: 0/0 is Top Right.
+            // This means they interpret the machine's "Right" edge as 0.
+            // The driver reports physical coordinates (e.g., 0 to 430).
+            // Standard view: 0 is Left.
+            // User view: 0 is Right.
+            // So to match User Mental Model, we should FLIP the display.
+            // Such that Physical 0 draws on the Right.
+            // And Physical 430 draws on the Left.
+            //
+            // Transformation: x' = maxX - x (assuming maxX is the width).
+            // To implement this in graphics transform:
+            // Translate(dataW, 0) -> Scale(-1, 1).
+            g2.translate(dataW, 0);
+            if (swapXY) {
+                g2.scale(-1, 1);
+            }
+        }
+
         // Draw Paper Border (optional, roughly)
         g2.setColor(new Color(240, 240, 240));
         g2.fill(new java.awt.geom.Rectangle2D.Double(minX, minY, dataW, dataH));
@@ -117,9 +169,20 @@ public class VisualizationPanel extends JPanel {
             if (path.isEmpty())
                 continue;
             Path2D p2d = new Path2D.Double();
-            p2d.moveTo(path.get(0).x, path.get(0).y);
+            double sx = path.get(0).x;
+            double sy = path.get(0).y;
+            if (swapXY)
+                p2d.moveTo(sy, sx);
+            else
+                p2d.moveTo(sx, sy);
+
             for (int i = 1; i < path.size(); i++) {
-                p2d.lineTo(path.get(i).x, path.get(i).y);
+                sx = path.get(i).x;
+                sy = path.get(i).y;
+                if (swapXY)
+                    p2d.lineTo(sy, sx);
+                else
+                    p2d.lineTo(sx, sy);
             }
             g2.draw(p2d);
         }

@@ -13,7 +13,7 @@ public class PlotterPanel extends JPanel {
     private final JTextField jsonField;
     private final JTextField pythonPathField;
     // Model Selection moved to SettingsPanel
-    private final JCheckBox mockCheckBox;
+    // Model Selection moved to SettingsPanel
     private final JCheckBox verboseCheckBox;
     // Speed spinners moved to SettingsPanel
     private final SettingsPanel settingsPanel;
@@ -30,7 +30,32 @@ public class PlotterPanel extends JPanel {
         this.settingsPanel = settingsPanel;
 
         // Define how to run driver commands from settings panel
-        this.settingsPanel.setDriverRunner(args -> runDriverCommand(args));
+        this.settingsPanel.setManualSession(new SettingsPanel.ManualControlSession() {
+            @Override
+            public void sendRelativeMove(double dx, double dy) {
+                ensureManualServer();
+                sendServerCommand(String.format(java.util.Locale.US, "MOVE %f %f", dx, dy));
+            }
+
+            @Override
+            public void sendPenCommand(String direction, int height) {
+                ensureManualServer();
+                // Note: The driver currently uses configured height from options
+                // We could pass height in protocol if needed, but for now just UP/DOWN
+                sendServerCommand("PEN " + direction);
+            }
+
+            @Override
+            public void resetServer() {
+                if (manualServerProcess != null && manualServerProcess.isAlive()) {
+                    manualServerProcess.destroy();
+                    manualServerProcess = null;
+                    appendToConsole("[SRV] Server reset due to configuration change.");
+                }
+            }
+        });
+
+        this.settingsPanel.addVisualChangeListener(this::updateVisualSettings);
 
         setLayout(new BorderLayout());
         setBorder(new EmptyBorder(10, 10, 10, 10));
@@ -82,10 +107,9 @@ public class PlotterPanel extends JPanel {
         gbc.gridx = 1;
         gbc.weightx = 0.9;
         gbc.gridwidth = 2;
+        gbc.gridwidth = 2;
         JPanel checkBoxPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        mockCheckBox = new JCheckBox("Mock Mode (No Hardware)", true);
-        checkBoxPanel.add(mockCheckBox);
-        checkBoxPanel.add(Box.createHorizontalStrut(15)); // Spacer
+        // Mock Mode moved to SettingsPanel
         verboseCheckBox = new JCheckBox("Verbose Logging", true); // Default TRUE for debugging
         checkBoxPanel.add(verboseCheckBox);
         configPanel.add(checkBoxPanel, gbc);
@@ -156,13 +180,20 @@ public class PlotterPanel extends JPanel {
 
         // Reload vis just in case
         visPanel.loadFromJson(new File(jsonPath));
+        updateVisualSettings();
 
         List<String> cmd = new ArrayList<>();
         cmd.add(pythonPathField.getText());
         cmd.add("driver/driver.py");
         cmd.add(jsonPath);
-        if (mockCheckBox.isSelected()) {
+        if (settingsPanel.isMockMode()) {
             cmd.add("--mock");
+        }
+        if (settingsPanel.isInvertX()) {
+            cmd.add("--invert-x");
+        }
+        if (settingsPanel.isSwapXY()) {
+            cmd.add("--swap-xy");
         }
         if (verboseCheckBox.isSelected()) {
             cmd.add("--verbose");
@@ -200,7 +231,7 @@ public class PlotterPanel extends JPanel {
             inputButton.setEnabled(true);
 
             // Disable config while running
-            mockCheckBox.setEnabled(false);
+            // Disable config while running
             settingsPanel.setSettingsEnabled(false);
             pythonPathField.setEnabled(false);
 
@@ -273,7 +304,7 @@ public class PlotterPanel extends JPanel {
         inputButton.setEnabled(false);
 
         // Re-enable config
-        mockCheckBox.setEnabled(true);
+        // Re-enable config
         settingsPanel.setSettingsEnabled(true);
         pythonPathField.setEnabled(true);
 
@@ -281,49 +312,73 @@ public class PlotterPanel extends JPanel {
         processInputWriter = null;
     }
 
-    private void runDriverCommand(java.util.List<String> extraArgs) {
-        // Construct minimal command for manual operation
-        List<String> cmd = new ArrayList<>();
-        cmd.add(pythonPathField.getText());
-        cmd.add("driver/driver.py");
-        // Manual mode doesn't need input file, but driver expects one if not manual
-        // However, we made input optional in driver.py if --manual-pen is set.
+    private Process manualServerProcess;
+    private BufferedWriter manualServerWriter;
 
-        if (mockCheckBox.isSelected()) {
-            cmd.add("--mock");
-        }
-        if (verboseCheckBox.isSelected()) {
-            cmd.add("--verbose");
+    private void ensureManualServer() {
+        if (manualServerProcess != null && manualServerProcess.isAlive()) {
+            return;
         }
 
-        cmd.add("--model");
-        cmd.add(String.valueOf(settingsPanel.getPlotterModelIndex() + 1));
-
-        cmd.addAll(extraArgs);
-
-        appendToConsole("Running Manual Command...");
-        appendToConsole("Command: " + String.join(" ", cmd));
-
-        ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.redirectErrorStream(true);
+        // Start Server
         try {
-            Process p = pb.start();
-            // We just read output and wait, no complex interaction needed here
+            List<String> cmd = new ArrayList<>();
+            cmd.add(pythonPathField.getText());
+            cmd.add("driver/driver.py");
+            cmd.add("--interactive-server");
+            if (settingsPanel.isMockMode())
+                cmd.add("--mock");
+            if (verboseCheckBox.isSelected())
+                cmd.add("--verbose");
+            if (settingsPanel.isInvertX())
+                cmd.add("--invert-x");
+            if (settingsPanel.isSwapXY())
+                cmd.add("--swap-xy");
+            // Model/Speed settings are set once at startup of server, might get stale if
+            // user changes them?
+            // User can just restart app or we can add protocol to update settings. For now
+            // assume static.
+
+            appendToConsole("Starting Manual Control Server...");
+            ProcessBuilder pb = new ProcessBuilder(cmd);
+            pb.redirectErrorStream(true);
+            manualServerProcess = pb.start();
+            manualServerWriter = new BufferedWriter(new OutputStreamWriter(manualServerProcess.getOutputStream()));
+
+            // Read output in thread
             new Thread(() -> {
-                try (BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(manualServerProcess.getInputStream()))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
                         final String l = line;
-                        SwingUtilities.invokeLater(() -> appendToConsole(l));
+                        SwingUtilities.invokeLater(() -> appendToConsole("[SRV] " + l));
                     }
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
             }).start();
+
         } catch (IOException e) {
-            appendToConsole("Error starting manual process: " + e.getMessage());
             e.printStackTrace();
+            appendToConsole("Failed to start server: " + e.getMessage());
         }
+    }
+
+    private void sendServerCommand(String cmd) {
+        if (manualServerProcess != null && manualServerProcess.isAlive()) {
+            try {
+                manualServerWriter.write(cmd + "\n");
+                manualServerWriter.flush();
+            } catch (IOException e) {
+                appendToConsole("Error sending to server: " + e.getMessage());
+            }
+        }
+    }
+
+    private void updateVisualSettings() {
+        visPanel.setInvertX(settingsPanel.isVisualMirror());
+        visPanel.setSwapXY(settingsPanel.isSwapXY());
     }
 
     private void appendToConsole(String text) {

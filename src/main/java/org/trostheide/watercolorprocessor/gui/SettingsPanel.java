@@ -18,7 +18,11 @@ public class SettingsPanel extends JPanel {
     private final JSpinner speedUpSpinner;
     private final JSpinner zUpSpinner;
     private final JSpinner zDownSpinner;
+    private final JCheckBox invertXCheckBox;
+    private final JCheckBox swapXYCheckBox;
+    private final JCheckBox visualMirrorCheckBox;
     private final JComboBox<String> modelComboBox;
+    private final JCheckBox mockCheckBox;
 
     // Station Editor Components
     private final JTable stationTable;
@@ -40,9 +44,26 @@ public class SettingsPanel extends JPanel {
     private final JButton removeBtn;
     private final JButton saveFileBtn;
 
-    // Callback for running driver commands (e.g. manual pen toggle)
-    // We pass a List of Strings (args basically)
-    private java.util.function.Consumer<java.util.List<String>> driverRunner;
+    // Callback for running driver commands
+    public interface ManualControlSession {
+        void sendRelativeMove(double dx, double dy);
+
+        void sendPenCommand(String direction, int height);
+
+        void resetServer();
+    }
+
+    private ManualControlSession manualSession;
+    private Runnable visualChangeListener;
+
+    public void addVisualChangeListener(Runnable listener) {
+        this.visualChangeListener = listener;
+    }
+
+    private void fireVisualChange() {
+        if (visualChangeListener != null)
+            visualChangeListener.run();
+    }
 
     public SettingsPanel() {
         setLayout(new BorderLayout());
@@ -57,6 +78,34 @@ public class SettingsPanel extends JPanel {
         modelComboBox = new JComboBox<>(new String[] { "Standard (A4 / V3)", "Large (A3 / V3 XL)" });
         modelComboBox.setSelectedIndex(1); // Default to A3
         generalPanel.add(modelComboBox);
+
+        // Mock Mode
+        mockCheckBox = new JCheckBox("Mock Mode", false);
+        generalPanel.add(mockCheckBox);
+
+        // Invert X
+        invertXCheckBox = new JCheckBox("Invert X (0,0 Top-Right)", false); // Default false based on user feedback
+                                                                            // (Invert logic moves to Far Left)
+        invertXCheckBox.addActionListener(e -> {
+            if (manualSession != null)
+                manualSession.resetServer();
+        });
+        generalPanel.add(invertXCheckBox);
+
+        // Swap XY
+        swapXYCheckBox = new JCheckBox("Swap X/Y", true); // Default true based on calibration
+        swapXYCheckBox.addActionListener(e -> {
+            if (manualSession != null)
+                manualSession.resetServer();
+            fireVisualChange();
+        });
+        generalPanel.add(swapXYCheckBox);
+
+        // Visual Mirror
+        JCheckBox visualMirrorCheckBox = new JCheckBox("View: 0,0 Top-Right", true); // Default true for this user
+        visualMirrorCheckBox.addActionListener(e -> fireVisualChange());
+        generalPanel.add(visualMirrorCheckBox);
+        this.visualMirrorCheckBox = visualMirrorCheckBox;
 
         // Speed Down
         generalPanel.add(new JLabel("Draw Speed (%):"));
@@ -161,8 +210,101 @@ public class SettingsPanel extends JPanel {
         gbc.gridwidth = 2;
         formPanel.add(btnPanel, gbc);
 
+        // --- NEW: Manual Controls Panel ---
+        JPanel manualPanel = new JPanel(new GridBagLayout());
+        manualPanel.setBorder(BorderFactory.createTitledBorder("Manual Control"));
+        GridBagConstraints mgbc = new GridBagConstraints();
+        mgbc.insets = new Insets(5, 5, 5, 5);
+        mgbc.fill = GridBagConstraints.BOTH;
+
+        // Step Size
+        mgbc.gridx = 0;
+        mgbc.gridy = 0;
+        mgbc.gridwidth = 3;
+        JPanel stepPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        stepPanel.add(new JLabel("Step (mm):"));
+        JSpinner stepSpinner = new JSpinner(new SpinnerNumberModel(10.0, 0.1, 100.0, 1.0));
+        stepPanel.add(stepSpinner);
+        manualPanel.add(stepPanel, mgbc);
+
+        // Direction Buttons
+        JButton btnUp = new JButton("▲ (-Y)");
+        JButton btnDown = new JButton("▼ (+Y)");
+        JButton btnLeft = new JButton("◀ (+X)");
+        JButton btnRight = new JButton("▶ (-X)");
+
+        // Actions
+        java.awt.event.ActionListener moveAction = e -> {
+            double step = (Double) stepSpinner.getValue();
+            double dx = 0, dy = 0;
+            if (e.getSource() == btnUp)
+                dy = -step; // User: Y- goes up
+            else if (e.getSource() == btnDown)
+                dy = step; // User: Y+ goes down
+            else if (e.getSource() == btnLeft)
+                dx = step; // User: X+ goes left
+            else if (e.getSource() == btnRight)
+                dx = -step; // User: X- goes right
+            runManualMove(dx, dy);
+        };
+
+        btnUp.addActionListener(moveAction);
+        btnDown.addActionListener(moveAction);
+        btnLeft.addActionListener(moveAction);
+        btnRight.addActionListener(moveAction);
+
+        // Layout Buttons (Cross shape)
+        mgbc.gridwidth = 1;
+        mgbc.gridx = 1;
+        mgbc.gridy = 1;
+        manualPanel.add(btnUp, mgbc); // Top
+        mgbc.gridx = 0;
+        mgbc.gridy = 2;
+        manualPanel.add(btnLeft, mgbc); // Left
+        mgbc.gridx = 2;
+        mgbc.gridy = 2;
+        manualPanel.add(btnRight, mgbc);// Right
+        mgbc.gridx = 1;
+        mgbc.gridy = 3;
+        manualPanel.add(btnDown, mgbc); // Bottom
+
+        // Key Bindings
+        InputMap im = manualPanel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap am = manualPanel.getActionMap();
+
+        im.put(KeyStroke.getKeyStroke("UP"), "moveUp");
+        im.put(KeyStroke.getKeyStroke("DOWN"), "moveDown");
+        im.put(KeyStroke.getKeyStroke("LEFT"), "moveLeft");
+        im.put(KeyStroke.getKeyStroke("RIGHT"), "moveRight");
+
+        am.put("moveUp", new AbstractAction() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                runManualMove(0, -(Double) stepSpinner.getValue());
+            }
+        });
+        am.put("moveDown", new AbstractAction() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                runManualMove(0, (Double) stepSpinner.getValue());
+            }
+        });
+        am.put("moveLeft", new AbstractAction() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                runManualMove((Double) stepSpinner.getValue(), 0);
+            }
+        });
+        am.put("moveRight", new AbstractAction() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                runManualMove(-(Double) stepSpinner.getValue(), 0);
+            }
+        });
+
+        // --- EAST Container Assembly ---
         JPanel rightContainer = new JPanel(new BorderLayout());
-        rightContainer.add(formPanel, BorderLayout.NORTH);
+        JPanel topRight = new JPanel(new BorderLayout());
+        topRight.add(formPanel, BorderLayout.NORTH);
+        topRight.add(manualPanel, BorderLayout.CENTER);
+
+        rightContainer.add(topRight, BorderLayout.NORTH);
 
         // Save to File Button
         saveFileBtn = new JButton("Save Configuration to Disk");
@@ -198,12 +340,32 @@ public class SettingsPanel extends JPanel {
         return (Integer) zDownSpinner.getValue();
     }
 
+    public boolean isMockMode() {
+        return mockCheckBox.isSelected();
+    }
+
+    public boolean isInvertX() {
+        return invertXCheckBox.isSelected();
+    }
+
+    public boolean isSwapXY() {
+        return swapXYCheckBox.isSelected();
+    }
+
+    public boolean isVisualMirror() {
+        return visualMirrorCheckBox.isSelected();
+    }
+
     public void setSettingsEnabled(boolean enabled) {
         modelComboBox.setEnabled(enabled);
         speedDownSpinner.setEnabled(enabled);
         speedUpSpinner.setEnabled(enabled);
         zUpSpinner.setEnabled(enabled);
         zDownSpinner.setEnabled(enabled);
+        mockCheckBox.setEnabled(enabled);
+        invertXCheckBox.setEnabled(enabled);
+        swapXYCheckBox.setEnabled(enabled);
+        visualMirrorCheckBox.setEnabled(enabled);
 
         stationTable.setEnabled(enabled);
         idField.setEnabled(enabled);
@@ -216,8 +378,8 @@ public class SettingsPanel extends JPanel {
         saveFileBtn.setEnabled(enabled);
     }
 
-    public void setDriverRunner(java.util.function.Consumer<java.util.List<String>> driverRunner) {
-        this.driverRunner = driverRunner;
+    public void setManualSession(ManualControlSession session) {
+        this.manualSession = session;
     }
 
     // --- Internal Logic (Same as StationEditorPanel) ---
@@ -316,18 +478,15 @@ public class SettingsPanel extends JPanel {
     }
 
     private void runManualPen(String direction) {
-        if (driverRunner != null) {
-            java.util.List<String> extraArgs = new java.util.ArrayList<>();
-            extraArgs.add("--manual-pen");
-            extraArgs.add(direction);
+        if (manualSession != null) {
+            int height = "UP".equals(direction) ? getPenUpHeight() : getPenDownHeight();
+            manualSession.sendPenCommand(direction, height);
+        }
+    }
 
-            // Pass current settings to ensure they are used
-            extraArgs.add("--pen-up");
-            extraArgs.add(String.valueOf(getPenUpHeight()));
-            extraArgs.add("--pen-down");
-            extraArgs.add(String.valueOf(getPenDownHeight()));
-
-            driverRunner.accept(extraArgs);
+    private void runManualMove(double dx, double dy) {
+        if (manualSession != null) {
+            manualSession.sendRelativeMove(dx, dy);
         }
     }
 
