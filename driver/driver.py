@@ -109,12 +109,15 @@ def load_station_config():
 
 def main():
     parser = argparse.ArgumentParser(description='Watercolor Driver')
-    parser.add_argument('input', help='Input JSON file')
+    parser.add_argument('input', nargs='?', help='Input JSON file (optional if --manual-pen used)')
     parser.add_argument('--mock', action='store_true', help='Force Mock Mode')
     parser.add_argument('--verbose', action='store_true', help='Enable verbose logging')
     parser.add_argument('--model', type=int, default=1, help='AxiDraw Model (1=A4, 2=A3/XL)')
     parser.add_argument('--speed-down', type=int, default=25, help='Pen Down Speed (1-100)')
     parser.add_argument('--speed-up', type=int, default=75, help='Pen Up Speed (1-100)')
+    parser.add_argument('--pen-up', type=int, help='Pen Up Height (0-100)')
+    parser.add_argument('--pen-down', type=int, help='Pen Down Height (0-100)')
+    parser.add_argument('--manual-pen', choices=['UP', 'DOWN'], help='Manually move pen and exit')
     parser.add_argument('--report-position', action='store_true', help='Report realtime position for GUI')
     args = parser.parse_args()
 
@@ -154,6 +157,15 @@ def main():
     print(f"INFO: Setting Pen Heights -> UP: {config.PEN_HEIGHTS['UP']}%, DOWN: {config.PEN_HEIGHTS['DOWN']}%")
     ad.options.pen_pos_up = config.PEN_HEIGHTS["UP"]
     ad.options.pen_pos_down = config.PEN_HEIGHTS["DOWN"]
+    
+    # Override from CLI if provided
+    if args.pen_up is not None:
+        print(f"INFO: Overriding Pen Up -> {args.pen_up}%")
+        ad.options.pen_pos_up = args.pen_up
+    
+    if args.pen_down is not None:
+        print(f"INFO: Overriding Pen Down -> {args.pen_down}%")
+        ad.options.pen_pos_down = args.pen_down
     try:
         ad.options.model = args.model
     except:
@@ -166,6 +178,26 @@ def main():
     # Init options for interactive mode
     print("INFO: Updating AxiDraw options...")
     ad.update()
+
+    # Safety: Always raise pen on connect/start
+    print("INFO: Safely raising pen...")
+    ad.penup()
+
+    # Manual Mode Check
+    if args.manual_pen:
+        print(f"INFO: Manual Pen Mode -> {args.manual_pen}")
+        if args.manual_pen == 'DOWN':
+            ad.pendown()
+        else:
+            ad.penup()
+        
+        print("INFO: Manual operation complete. Exiting.")
+        ad.disconnect()
+        return
+
+    if not args.input:
+        print("ERROR: Input file is required unless using --manual-pen")
+        sys.exit(1)
 
     # Load Data
     print(f"INFO: Loading input file: {args.input}")

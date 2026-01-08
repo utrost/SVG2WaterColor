@@ -8,12 +8,19 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.io.File;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-public class StationEditorPanel extends JPanel {
+public class SettingsPanel extends JPanel {
 
+    // General Settings (Moved from PlotterPanel)
+    private final JSpinner speedDownSpinner;
+    private final JSpinner speedUpSpinner;
+    private final JSpinner zUpSpinner;
+    private final JSpinner zDownSpinner;
+    private final JComboBox<String> modelComboBox;
+
+    // Station Editor Components
     private final JTable stationTable;
     private final DefaultTableModel tableModel;
 
@@ -28,11 +35,61 @@ public class StationEditorPanel extends JPanel {
     private final File configFile = new File("stations.json");
     private final ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 
-    public StationEditorPanel() {
+    // Validation/Control components for mass enabling/disabling
+    private final JButton addBtn;
+    private final JButton removeBtn;
+    private final JButton saveFileBtn;
+
+    // Callback for running driver commands (e.g. manual pen toggle)
+    // We pass a List of Strings (args basically)
+    private java.util.function.Consumer<java.util.List<String>> driverRunner;
+
+    public SettingsPanel() {
         setLayout(new BorderLayout());
         setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        // Center: Table
+        // --- NORTH: General Settings ---
+        JPanel generalPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 20, 10));
+        generalPanel.setBorder(BorderFactory.createTitledBorder("General Plotter Settings"));
+
+        // Plotter Size
+        generalPanel.add(new JLabel("Plotter Size:"));
+        modelComboBox = new JComboBox<>(new String[] { "Standard (A4 / V3)", "Large (A3 / V3 XL)" });
+        modelComboBox.setSelectedIndex(1); // Default to A3
+        generalPanel.add(modelComboBox);
+
+        // Speed Down
+        generalPanel.add(new JLabel("Draw Speed (%):"));
+        speedDownSpinner = new JSpinner(new SpinnerNumberModel(25, 1, 100, 1));
+        generalPanel.add(speedDownSpinner);
+
+        // Speed Up
+        generalPanel.add(new JLabel("Travel Speed (%):"));
+        speedUpSpinner = new JSpinner(new SpinnerNumberModel(75, 1, 100, 1));
+        generalPanel.add(speedUpSpinner);
+
+        // Pen Up
+        generalPanel.add(new JLabel("Pen Up (%):"));
+        zUpSpinner = new JSpinner(new SpinnerNumberModel(60, 0, 100, 1));
+        generalPanel.add(zUpSpinner);
+
+        // Pen Down
+        generalPanel.add(new JLabel("Pen Down (%):"));
+        zDownSpinner = new JSpinner(new SpinnerNumberModel(30, 0, 100, 1));
+        generalPanel.add(zDownSpinner);
+
+        // Test Buttons
+        JButton testUpBtn = new JButton("Test UP");
+        testUpBtn.addActionListener(e -> runManualPen("UP"));
+        generalPanel.add(testUpBtn);
+
+        JButton testDownBtn = new JButton("Test DOWN");
+        testDownBtn.addActionListener(e -> runManualPen("DOWN"));
+        generalPanel.add(testDownBtn);
+
+        add(generalPanel, BorderLayout.NORTH);
+
+        // --- CENTER: Station Table ---
         tableModel = new DefaultTableModel(new String[] { "ID", "X (mm)", "Y (mm)", "Z Down", "Behavior" }, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -47,7 +104,7 @@ public class StationEditorPanel extends JPanel {
         scrollPane.setBorder(BorderFactory.createTitledBorder("Configured Stations"));
         add(scrollPane, BorderLayout.CENTER);
 
-        // Right: Form
+        // --- EAST: Station Editor Form ---
         JPanel formPanel = new JPanel(new GridBagLayout());
         formPanel.setBorder(BorderFactory.createTitledBorder("Edit Station"));
         GridBagConstraints gbc = new GridBagConstraints();
@@ -91,9 +148,9 @@ public class StationEditorPanel extends JPanel {
 
         // Buttons
         JPanel btnPanel = new JPanel(new FlowLayout());
-        JButton addBtn = new JButton("Add / Update");
+        addBtn = new JButton("Add / Update");
         addBtn.addActionListener(e -> saveStation());
-        JButton removeBtn = new JButton("Remove");
+        removeBtn = new JButton("Remove");
         removeBtn.addActionListener(e -> removeStation());
 
         btnPanel.add(addBtn);
@@ -108,7 +165,7 @@ public class StationEditorPanel extends JPanel {
         rightContainer.add(formPanel, BorderLayout.NORTH);
 
         // Save to File Button
-        JButton saveFileBtn = new JButton("Save Configuration to Disk");
+        saveFileBtn = new JButton("Save Configuration to Disk");
         saveFileBtn.setFont(saveFileBtn.getFont().deriveFont(Font.BOLD));
         saveFileBtn.addActionListener(e -> saveToFile());
         rightContainer.add(saveFileBtn, BorderLayout.SOUTH);
@@ -118,6 +175,52 @@ public class StationEditorPanel extends JPanel {
         // Initial Load
         loadFromFile();
     }
+
+    // --- Public Accessors for PlotterPanel ---
+    public int getDrawSpeed() {
+        return (Integer) speedDownSpinner.getValue();
+    }
+
+    public int getTravelSpeed() {
+        return (Integer) speedUpSpinner.getValue();
+    }
+
+    // Index 0 -> Model 1 (A4), Index 1 -> Model 2 (A3)
+    public int getPlotterModelIndex() {
+        return modelComboBox.getSelectedIndex();
+    }
+
+    public int getPenUpHeight() {
+        return (Integer) zUpSpinner.getValue();
+    }
+
+    public int getPenDownHeight() {
+        return (Integer) zDownSpinner.getValue();
+    }
+
+    public void setSettingsEnabled(boolean enabled) {
+        modelComboBox.setEnabled(enabled);
+        speedDownSpinner.setEnabled(enabled);
+        speedUpSpinner.setEnabled(enabled);
+        zUpSpinner.setEnabled(enabled);
+        zDownSpinner.setEnabled(enabled);
+
+        stationTable.setEnabled(enabled);
+        idField.setEnabled(enabled);
+        xSpinner.setEnabled(enabled);
+        ySpinner.setEnabled(enabled);
+        zSpinner.setEnabled(enabled);
+        behaviorCombo.setEnabled(enabled);
+        addBtn.setEnabled(enabled);
+        removeBtn.setEnabled(enabled);
+        saveFileBtn.setEnabled(enabled);
+    }
+
+    public void setDriverRunner(java.util.function.Consumer<java.util.List<String>> driverRunner) {
+        this.driverRunner = driverRunner;
+    }
+
+    // --- Internal Logic (Same as StationEditorPanel) ---
 
     private void loadSelection() {
         int row = stationTable.getSelectedRow();
@@ -209,6 +312,22 @@ public class StationEditorPanel extends JPanel {
         } catch (Exception e) {
             e.printStackTrace();
             JOptionPane.showMessageDialog(this, "Error saving file: " + e.getMessage());
+        }
+    }
+
+    private void runManualPen(String direction) {
+        if (driverRunner != null) {
+            java.util.List<String> extraArgs = new java.util.ArrayList<>();
+            extraArgs.add("--manual-pen");
+            extraArgs.add(direction);
+
+            // Pass current settings to ensure they are used
+            extraArgs.add("--pen-up");
+            extraArgs.add(String.valueOf(getPenUpHeight()));
+            extraArgs.add("--pen-down");
+            extraArgs.add(String.valueOf(getPenDownHeight()));
+
+            driverRunner.accept(extraArgs);
         }
     }
 

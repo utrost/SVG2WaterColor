@@ -12,11 +12,11 @@ public class PlotterPanel extends JPanel {
 
     private final JTextField jsonField;
     private final JTextField pythonPathField;
-    private final JComboBox<String> modelComboBox;
+    // Model Selection moved to SettingsPanel
     private final JCheckBox mockCheckBox;
     private final JCheckBox verboseCheckBox;
-    private final JSpinner speedDownSpinner;
-    private final JSpinner speedUpSpinner;
+    // Speed spinners moved to SettingsPanel
+    private final SettingsPanel settingsPanel;
     private final JTextArea consoleArea;
     private final VisualizationPanel visPanel; // New Visualizer
     private final JButton startButton;
@@ -26,7 +26,12 @@ public class PlotterPanel extends JPanel {
     private Process currentProcess;
     private BufferedWriter processInputWriter;
 
-    public PlotterPanel() {
+    public PlotterPanel(SettingsPanel settingsPanel) {
+        this.settingsPanel = settingsPanel;
+
+        // Define how to run driver commands from settings panel
+        this.settingsPanel.setDriverRunner(args -> runDriverCommand(args));
+
         setLayout(new BorderLayout());
         setBorder(new EmptyBorder(10, 10, 10, 10));
 
@@ -66,16 +71,7 @@ public class PlotterPanel extends JPanel {
         pythonPathField = new JTextField(defaultPython);
         configPanel.add(pythonPathField, gbc);
 
-        // Model Selection
-        gbc.gridx = 0;
-        gbc.gridy = 2;
-        gbc.weightx = 0.1;
-        configPanel.add(new JLabel("Plotter Size:"), gbc);
-
-        gbc.gridx = 1;
-        gbc.weightx = 0.8;
-        modelComboBox = new JComboBox<>(new String[] { "Standard (A4 / V3)", "Large (A3 / V3 XL)" });
-        configPanel.add(modelComboBox, gbc);
+        // Model Selection moved to SettingsPanel
 
         // Flags
         gbc.gridx = 0;
@@ -94,22 +90,7 @@ public class PlotterPanel extends JPanel {
         checkBoxPanel.add(verboseCheckBox);
         configPanel.add(checkBoxPanel, gbc);
 
-        // Speed Controls
-        gbc.gridwidth = 1;
-        gbc.gridy = 4;
-
-        gbc.gridx = 0;
-        configPanel.add(new JLabel("Draw Speed (%):"), gbc);
-        gbc.gridx = 1;
-        speedDownSpinner = new JSpinner(new SpinnerNumberModel(25, 1, 100, 1));
-        configPanel.add(speedDownSpinner, gbc);
-
-        gbc.gridx = 2;
-        JPanel speedUpPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        speedUpPanel.add(new JLabel(" Travel (%): "));
-        speedUpSpinner = new JSpinner(new SpinnerNumberModel(75, 1, 100, 1));
-        speedUpPanel.add(speedUpSpinner);
-        configPanel.add(speedUpPanel, gbc);
+        // Speed Controls moved to SettingsPanel
 
         // Center: Split Pane for Console and Vis
         consoleArea = new JTextArea();
@@ -189,12 +170,17 @@ public class PlotterPanel extends JPanel {
 
         cmd.add("--model");
         // Index 0 -> Model 1 (A4), Index 1 -> Model 2 (A3)
-        cmd.add(String.valueOf(modelComboBox.getSelectedIndex() + 1));
+        cmd.add(String.valueOf(settingsPanel.getPlotterModelIndex() + 1));
 
         cmd.add("--speed-down");
-        cmd.add(speedDownSpinner.getValue().toString());
+        cmd.add(String.valueOf(settingsPanel.getDrawSpeed()));
         cmd.add("--speed-up");
-        cmd.add(speedUpSpinner.getValue().toString());
+        cmd.add(String.valueOf(settingsPanel.getTravelSpeed()));
+
+        cmd.add("--pen-up");
+        cmd.add(String.valueOf(settingsPanel.getPenUpHeight()));
+        cmd.add("--pen-down");
+        cmd.add(String.valueOf(settingsPanel.getPenDownHeight()));
 
         cmd.add("--report-position");
 
@@ -215,10 +201,7 @@ public class PlotterPanel extends JPanel {
 
             // Disable config while running
             mockCheckBox.setEnabled(false);
-            verboseCheckBox.setEnabled(false);
-            modelComboBox.setEnabled(false);
-            speedDownSpinner.setEnabled(false);
-            speedUpSpinner.setEnabled(false);
+            settingsPanel.setSettingsEnabled(false);
             pythonPathField.setEnabled(false);
 
             // Output Reader Thread
@@ -291,14 +274,56 @@ public class PlotterPanel extends JPanel {
 
         // Re-enable config
         mockCheckBox.setEnabled(true);
-        verboseCheckBox.setEnabled(true);
-        modelComboBox.setEnabled(true);
-        speedDownSpinner.setEnabled(true);
-        speedUpSpinner.setEnabled(true);
+        settingsPanel.setSettingsEnabled(true);
         pythonPathField.setEnabled(true);
 
         currentProcess = null;
         processInputWriter = null;
+    }
+
+    private void runDriverCommand(java.util.List<String> extraArgs) {
+        // Construct minimal command for manual operation
+        List<String> cmd = new ArrayList<>();
+        cmd.add(pythonPathField.getText());
+        cmd.add("driver/driver.py");
+        // Manual mode doesn't need input file, but driver expects one if not manual
+        // However, we made input optional in driver.py if --manual-pen is set.
+
+        if (mockCheckBox.isSelected()) {
+            cmd.add("--mock");
+        }
+        if (verboseCheckBox.isSelected()) {
+            cmd.add("--verbose");
+        }
+
+        cmd.add("--model");
+        cmd.add(String.valueOf(settingsPanel.getPlotterModelIndex() + 1));
+
+        cmd.addAll(extraArgs);
+
+        appendToConsole("Running Manual Command...");
+        appendToConsole("Command: " + String.join(" ", cmd));
+
+        ProcessBuilder pb = new ProcessBuilder(cmd);
+        pb.redirectErrorStream(true);
+        try {
+            Process p = pb.start();
+            // We just read output and wait, no complex interaction needed here
+            new Thread(() -> {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        final String l = line;
+                        SwingUtilities.invokeLater(() -> appendToConsole(l));
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }).start();
+        } catch (IOException e) {
+            appendToConsole("Error starting manual process: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     private void appendToConsole(String text) {

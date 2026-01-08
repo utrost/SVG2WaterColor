@@ -21,15 +21,17 @@ public class MainFrame extends JFrame {
         statusScroll.setPreferredSize(new Dimension(800, 100));
 
         // Create Panels
+        // Create Panels
+        SettingsPanel settingsPanel = new SettingsPanel();
+        // PlotterPanel now takes SettingsPanel to read speed configs
+        PlotterPanel plotterPanel = new PlotterPanel(settingsPanel);
         ProcessorPanel processorPanel = new ProcessorPanel(statusArea);
-        PlotterPanel plotterPanel = new PlotterPanel();
-        StationEditorPanel stationPanel = new StationEditorPanel();
 
         // Tabs
         JTabbedPane tabbedPane = new JTabbedPane();
         tabbedPane.addTab("1. Process SVG", processorPanel);
         tabbedPane.addTab("2. Plot (Driver)", plotterPanel);
-        tabbedPane.addTab("3. Configure Stations", stationPanel);
+        tabbedPane.addTab("Settings", settingsPanel);
 
         // Layout
         // The Processor panel needs the shared status area below it,

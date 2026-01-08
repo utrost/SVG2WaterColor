@@ -39,14 +39,24 @@ The Java application requires a configuration object (passed via CLI):
 | defaultStationId (-s) | String | Fallback Station ID used if SVG layers are unnamed or missing. |
 | curveApproximation (-c) | Double | Step size (mm) for linearizing curves. Default: 0.5. |
 
-### **2.1.1 GUI Mode (New)**
+### **2.1.1 GUI Mode**
 
 Start the Swing GUI to configure parameters visually:
 ```bash
-./run_gui.sh
+./run_gui.bat
 ```
-Or manually:
-`java -cp target/watercolor-processor-1.0-SNAPSHOT.jar org.trostheide.watercolorprocessor.gui.WatercolorGUI`
+
+**New: Settings Tab & Manual Control**
+The GUI now includes a dedicated **Settings** tab for managing plotter hardware and paint stations.
+
+*   **General Plotter Settings:**
+    *   **Plotter Size:** Select between Standard (A4) and Large (A3/XL) models.
+    *   **Pen Up/Down:** Calibrate the Z-axis height (percentage) for drawing and travelling.
+    *   **Speeds:** Adjust Draw and Travel speeds to optimize for ink flow.
+*   **Manual Control:**
+    *   Use the **Test UP** and **Test DOWN** buttons to physically verify pen heights before starting a plot.
+    *   *Safety Feature:* The plotter will automatically raise the pen (Safety Pen Up) immediately upon connection.
+*   **Station Management:** Configure the physical location (X, Y) and behavior of paint refill stations.
 
 ### **2.2 Functional Logic**
 
@@ -146,9 +156,6 @@ STATIONS \= {
 
 ### **4.2 Functional Logic**
 
-1. **Load JSON:** Parses the multi-layer JSON structure.
-2. **Safety Check:** Validates metadata.bounds against physical limits immediately (O(1)).
-3. **Layer Loop:**
 1.  **Load JSON:** Parses the multi-layer JSON structure.
 2.  **Safety Check:** Validates metadata.bounds against physical limits immediately (O(1)).
 3.  **Layer Loop:**
@@ -159,6 +166,9 @@ STATIONS \= {
     *   Lookup stationId in config.py.
     *   Perform physical dip sequence (Move \-\> Pen Down \-\> Wait/Swirl \-\> Pen Up).
     *   *Note:* The logic is stateless; the return move to the drawing surface is handled by the *next* command in the JSON.
+5.  **Manual & Safety Features:**
+    *   **Safety Startup:** Driver always issues a `penup` command upon connection.
+    *   **Manual Mode:** Can be invoked with `--manual-pen [UP|DOWN]` to test heights without running a plot.
 
 ## **5. Windows Execution**
 
