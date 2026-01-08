@@ -81,7 +81,9 @@ public class ProcessorPanel extends JPanel {
         gbc.gridx = 1;
         gbc.weightx = 0.9;
         gbc.gridwidth = 2;
-        curveStepSpinner = new JSpinner(new SpinnerNumberModel(0.5, 0.01, 10.0, 0.1));
+        // High Resolution Default: 0.05mm (was 0.5mm)
+        // Step size: 0.01mm for fine tuning
+        curveStepSpinner = new JSpinner(new SpinnerNumberModel(0.05, 0.001, 10.0, 0.01));
         add(curveStepSpinner, gbc);
 
         // Row 4: Default Station
