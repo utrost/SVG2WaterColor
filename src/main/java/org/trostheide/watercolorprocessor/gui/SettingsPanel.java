@@ -16,8 +16,8 @@ public class SettingsPanel extends JPanel {
     // General Settings (Moved from PlotterPanel)
     private final JSpinner speedDownSpinner;
     private final JSpinner speedUpSpinner;
-    private final JSpinner zUpSpinner;
-    private final JSpinner zDownSpinner;
+    private JSpinner zUpSpinner;
+    private JSpinner zDownSpinner;
     private final JCheckBox invertXCheckBox;
     private final JCheckBox swapXYCheckBox;
     private final JCheckBox visualMirrorCheckBox;
@@ -116,25 +116,6 @@ public class SettingsPanel extends JPanel {
         generalPanel.add(new JLabel("Travel Speed (%):"));
         speedUpSpinner = new JSpinner(new SpinnerNumberModel(75, 1, 100, 1));
         generalPanel.add(speedUpSpinner);
-
-        // Pen Up
-        generalPanel.add(new JLabel("Pen Up (%):"));
-        zUpSpinner = new JSpinner(new SpinnerNumberModel(60, 0, 100, 1));
-        generalPanel.add(zUpSpinner);
-
-        // Pen Down
-        generalPanel.add(new JLabel("Pen Down (%):"));
-        zDownSpinner = new JSpinner(new SpinnerNumberModel(30, 0, 100, 1));
-        generalPanel.add(zDownSpinner);
-
-        // Test Buttons
-        JButton testUpBtn = new JButton("Test UP");
-        testUpBtn.addActionListener(e -> runManualPen("UP"));
-        generalPanel.add(testUpBtn);
-
-        JButton testDownBtn = new JButton("Test DOWN");
-        testDownBtn.addActionListener(e -> runManualPen("DOWN"));
-        generalPanel.add(testDownBtn);
 
         add(generalPanel, BorderLayout.NORTH);
 
@@ -268,6 +249,48 @@ public class SettingsPanel extends JPanel {
         mgbc.gridy = 3;
         manualPanel.add(btnDown, mgbc); // Bottom
 
+        mgbc.gridy = 3;
+        manualPanel.add(btnDown, mgbc); // Bottom
+
+        // Pen Height Config
+        mgbc.gridx = 0;
+        mgbc.gridy = 4;
+        mgbc.gridwidth = 3;
+        JPanel penConfigPanel = new JPanel(new FlowLayout());
+
+        // We need to re-initialize spinners here? No, they are final fields.
+        // But we need to make sure they are not added twice? We removed them from TOP.
+        // But wait, the lines removed above (120-129) included the initialization
+        // `zUpSpinner = ...`.
+        // If I remove the initialization lines, `zUpSpinner` will be null!
+        // CORRECTION: I must initialize them before adding them here.
+        // Actually, the previous 'remove' block deleted the initialization. I need to
+        // re-add initialization logic here or keep it earlier.
+        // Better: Initialize them earlier (top of constructor) or just here.
+
+        penConfigPanel.add(new JLabel("Up %:"));
+        zUpSpinner = new JSpinner(new SpinnerNumberModel(60, 0, 100, 1));
+        penConfigPanel.add(zUpSpinner);
+
+        penConfigPanel.add(new JLabel("Down %:"));
+        zDownSpinner = new JSpinner(new SpinnerNumberModel(30, 0, 100, 1));
+        penConfigPanel.add(zDownSpinner);
+
+        manualPanel.add(penConfigPanel, mgbc);
+
+        // Pen Controls
+        mgbc.gridx = 0;
+        mgbc.gridy = 5;
+        mgbc.gridwidth = 3;
+        JPanel penBtnPanel = new JPanel(new FlowLayout());
+        JButton testUpBtn = new JButton("Pen UP");
+        testUpBtn.addActionListener(e -> runManualPen("UP"));
+        JButton testDownBtn = new JButton("Pen DOWN");
+        testDownBtn.addActionListener(e -> runManualPen("DOWN"));
+        penBtnPanel.add(testUpBtn);
+        penBtnPanel.add(testDownBtn);
+        manualPanel.add(penBtnPanel, mgbc);
+
         // Key Bindings
         InputMap im = manualPanel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
         ActionMap am = manualPanel.getActionMap();
@@ -316,6 +339,18 @@ public class SettingsPanel extends JPanel {
 
         // Initial Load
         loadFromFile();
+
+        // --- Listeners for Auto-Restart on Spinner Change ---
+        // Moved here to ensure all components (especially zUp/zDown) are initialized.
+        javax.swing.event.ChangeListener valueChange = e -> {
+            if (manualSession != null)
+                manualSession.resetServer();
+        };
+
+        speedDownSpinner.addChangeListener(valueChange);
+        speedUpSpinner.addChangeListener(valueChange);
+        zUpSpinner.addChangeListener(valueChange);
+        zDownSpinner.addChangeListener(valueChange);
     }
 
     // --- Public Accessors for PlotterPanel ---

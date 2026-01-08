@@ -258,6 +258,13 @@ public class PlotterPanel extends JPanel {
                             continue;
                         }
 
+                        // Check for Connection Status
+                        if (l.contains("INFO: Connection Successful")) {
+                            updateStatus(true);
+                        } else if (l.contains("ERROR: Could not connect") || l.contains("Connection Failed")) {
+                            updateStatus(false);
+                        }
+
                         SwingUtilities.invokeLater(() -> appendToConsole(l));
                     }
                 } catch (IOException e) {
@@ -267,6 +274,8 @@ public class PlotterPanel extends JPanel {
                 } finally {
                     SwingUtilities.invokeLater(() -> {
                         appendToConsole("--- Process Exited ---");
+                        // If process dies, we lose connection
+                        updateStatus(false);
                         processCleanup();
                     });
                 }
@@ -352,6 +361,14 @@ public class PlotterPanel extends JPanel {
                     String line;
                     while ((line = reader.readLine()) != null) {
                         final String l = line;
+
+                        // Check Manual Server Connection
+                        if (l.contains("INFO: Connection Successful")) {
+                            updateStatus(true);
+                        } else if (l.contains("ERROR: Could not connect")) {
+                            updateStatus(false);
+                        }
+
                         SwingUtilities.invokeLater(() -> appendToConsole("[SRV] " + l));
                     }
                 } catch (IOException e) {
@@ -383,5 +400,12 @@ public class PlotterPanel extends JPanel {
 
     private void appendToConsole(String text) {
         consoleArea.append(text + "\n");
+    }
+
+    private void updateStatus(boolean connected) {
+        Window win = SwingUtilities.getWindowAncestor(this);
+        if (win instanceof MainFrame) {
+            ((MainFrame) win).setConnectionStatus(connected);
+        }
     }
 }

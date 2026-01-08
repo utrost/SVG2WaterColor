@@ -44,4 +44,14 @@ public class MainFrame extends JFrame {
         add(tabbedPane, BorderLayout.CENTER);
         add(statusScroll, BorderLayout.SOUTH);
     }
+
+    public void setConnectionStatus(boolean connected) {
+        if (connected) {
+            // Green Frame
+            getRootPane().setBorder(BorderFactory.createMatteBorder(5, 5, 5, 5, Color.GREEN));
+        } else {
+            // Red Frame or None? User said "Red if offline".
+            getRootPane().setBorder(BorderFactory.createMatteBorder(5, 5, 5, 5, Color.RED));
+        }
+    }
 }
