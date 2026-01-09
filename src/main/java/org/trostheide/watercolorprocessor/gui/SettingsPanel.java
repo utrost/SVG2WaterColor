@@ -54,6 +54,7 @@ public class SettingsPanel extends JPanel {
     private final JButton removeBtn;
     private final JButton saveFileBtn;
     private final JButton loadFileBtn;
+    private final JLabel activeConfigLabel;
 
     // Callback for running driver commands
     public interface ManualControlSession {
@@ -350,7 +351,11 @@ public class SettingsPanel extends JPanel {
 
         // Save to File Button
         // Save/Load Config
-        JPanel fileBtnPanel = new JPanel(new GridLayout(2, 1, 5, 5));
+        JPanel fileBtnPanel = new JPanel(new GridLayout(3, 1, 5, 5));
+
+        activeConfigLabel = new JLabel("Config: " + currentConfigFile.getName());
+        activeConfigLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        fileBtnPanel.add(activeConfigLabel);
 
         saveFileBtn = new JButton("Save Config As...");
         saveFileBtn.setFont(saveFileBtn.getFont().deriveFont(Font.BOLD));
@@ -561,6 +566,14 @@ public class SettingsPanel extends JPanel {
 
         // Ensure visual state is updated after load
         fireVisualChange();
+        updateConfigLabel();
+    }
+
+    private void updateConfigLabel() {
+        if (activeConfigLabel != null) {
+            activeConfigLabel.setText("Config: " + currentConfigFile.getName());
+            activeConfigLabel.setToolTipText(currentConfigFile.getAbsolutePath());
+        }
     }
 
     private double getDouble(Object o) {
@@ -581,6 +594,7 @@ public class SettingsPanel extends JPanel {
         if (fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
             currentConfigFile = fc.getSelectedFile();
             saveConfig();
+            updateConfigLabel();
         }
     }
 

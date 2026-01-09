@@ -46,17 +46,27 @@ Start the Swing GUI to configure parameters visually:
 ./run_gui.bat
 ```
 
-**New: Settings Tab & Manual Control**
+**New: Reference/Settings Tab & Manual Control**
 The GUI now includes a dedicated **Settings** tab for managing plotter hardware and paint stations.
 
 *   **General Plotter Settings:**
     *   **Plotter Size:** Select between Standard (A4) and Large (A3/XL) models.
+    *   **Orientation Control:**
+        *   **Invert X / Invert Y / Swap XY:** Fine-tune coordinate mapping to fix mirroring or rotation issues.
+        *   **Visual Mirror:** Adjusts the on-screen preview to match your physical setup.
     *   **Pen Up/Down:** Calibrate the Z-axis height (percentage) for drawing and travelling.
     *   **Speeds:** Adjust Draw and Travel speeds to optimize for ink flow.
+*   **Configuration Management:**
+    *   **Save/Load Config:** Save your entire setup (Stations + Settings) to custom `.json` files (e.g., `project_A.json`).
+    *   **Active Config Display:** The currently loaded configuration file is displayed above the buttons.
 *   **Manual Control:**
-    *   Use the **Test UP** and **Test DOWN** buttons to physically verify pen heights before starting a plot.
-    *   *Safety Feature:* The plotter will automatically raise the pen (Safety Pen Up) immediately upon connection.
+    *   Use the **Test UP** and **Test DOWN** buttons to physically verify pen heights.
+    *   Use the arrow buttons to jog the plotter head.
 *   **Station Management:** Configure the physical location (X, Y) and behavior of paint refill stations.
+
+### **2.1.2 Interface Improvements**
+*   **Processor Log:** The processing output log is now exclusively visible in the **"1. Process SVG"** tab to reduce clutter.
+*   **Driver Logs:** The console output now explicitly lists the target coordinates `(x mm / y mm)` when performing a Refill, confirming that your custom station settings are being used.
 
 ### **2.2 Functional Logic**
 
