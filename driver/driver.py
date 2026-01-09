@@ -130,10 +130,17 @@ def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=
             
     print(f"=== Layer {layer['id']} Complete ===")
 
-def load_station_config():
+def load_station_config(custom_path=None):
     # Look for config.json first (New Format), then stations.json (Old Format)
     # in CWD or script dir
-    files_to_check = ["config.json", os.path.join(os.path.dirname(__file__), "config.json")]
+    files_to_check = []
+    
+    if custom_path:
+        files_to_check.append(custom_path)
+    
+    # Default Paths
+    files_to_check.append("config.json")
+    files_to_check.append(os.path.join(os.path.dirname(__file__), "config.json"))
     
     for p in files_to_check:
         if os.path.exists(p):
@@ -186,10 +193,11 @@ def main():
     parser.add_argument('--move-y', type=float, help='Manual Move Y (mm)')
     parser.add_argument('--interactive-server', action='store_true', help='Run in persistent server mode for manual control')
     parser.add_argument('--report-position', action='store_true', help='Report realtime position for GUI')
+    parser.add_argument('--config', help='Path to custom configuration file')
     args = parser.parse_args()
 
     # Load Station Config Early
-    load_station_config()
+    load_station_config(getattr(args, 'config', None))
 
     # Initialize Driver
     if args.mock:

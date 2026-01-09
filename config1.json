@@ -1,0 +1,22 @@
+{
+  "general" : {
+    "modelIndex" : 1,
+    "mock" : false,
+    "invertX" : false,
+    "invertY" : true,
+    "swapXY" : true,
+    "visualMirror" : true,
+    "speedDown" : 25,
+    "speedUp" : 50,
+    "penUp" : 90,
+    "penDown" : 15
+  },
+  "stations" : {
+    "default_station" : {
+      "x" : 10.0,
+      "y" : 10.0,
+      "z_down" : 20,
+      "behavior" : "dip_swirl"
+    }
+  }
+}

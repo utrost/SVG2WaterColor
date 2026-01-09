@@ -217,6 +217,8 @@ public class PlotterPanel extends JPanel {
         cmd.add(String.valueOf(settingsPanel.getPenDownHeight()));
 
         cmd.add("--report-position");
+        cmd.add("--config");
+        cmd.add(settingsPanel.getCurrentConfigFile().getAbsolutePath());
 
         consoleArea.setText("");
         appendToConsole("Starting driver...");
@@ -348,6 +350,10 @@ public class PlotterPanel extends JPanel {
                 cmd.add("--invert-y");
             if (settingsPanel.isSwapXY())
                 cmd.add("--swap-xy");
+
+            cmd.add("--config");
+            cmd.add(settingsPanel.getCurrentConfigFile().getAbsolutePath());
+
             // Model/Speed settings are set once at startup of server, might get stale if
             // user changes them?
             // User can just restart app or we can add protocol to update settings. For now

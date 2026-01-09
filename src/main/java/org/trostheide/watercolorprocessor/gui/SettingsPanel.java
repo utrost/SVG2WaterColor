@@ -38,7 +38,7 @@ public class SettingsPanel extends JPanel {
     // In-memory store
     private final Map<String, StationConfig> stations = new LinkedHashMap<>();
     private final File legacyStationFile = new File("stations.json");
-    private final File configFile = new File("config.json");
+    private File currentConfigFile = new File("config.json");
     private final ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 
     // DTOs for Full Config
@@ -53,6 +53,7 @@ public class SettingsPanel extends JPanel {
     private final JButton addBtn;
     private final JButton removeBtn;
     private final JButton saveFileBtn;
+    private final JButton loadFileBtn;
 
     // Callback for running driver commands
     public interface ManualControlSession {
@@ -348,15 +349,26 @@ public class SettingsPanel extends JPanel {
         rightContainer.add(topRight, BorderLayout.NORTH);
 
         // Save to File Button
-        saveFileBtn = new JButton("Save Configuration to Disk");
+        // Save/Load Config
+        JPanel fileBtnPanel = new JPanel(new GridLayout(2, 1, 5, 5));
+
+        saveFileBtn = new JButton("Save Config As...");
         saveFileBtn.setFont(saveFileBtn.getFont().deriveFont(Font.BOLD));
-        saveFileBtn.addActionListener(e -> saveToFile());
-        rightContainer.add(saveFileBtn, BorderLayout.SOUTH);
+        saveFileBtn.addActionListener(e -> saveAs());
+
+        loadFileBtn = new JButton("Load Config...");
+        loadFileBtn.addActionListener(e -> loadFrom());
+
+        fileBtnPanel.add(saveFileBtn);
+        fileBtnPanel.add(loadFileBtn);
+
+        rightContainer.add(fileBtnPanel, BorderLayout.SOUTH);
 
         add(rightContainer, BorderLayout.EAST);
 
         // Initial Load
-        loadFromFile();
+        // Initial Load
+        loadConfig();
 
         // --- Listeners for Auto-Restart on Spinner Change ---
         // Moved here to ensure all components (especially zUp/zDown) are initialized.
@@ -434,10 +446,15 @@ public class SettingsPanel extends JPanel {
         addBtn.setEnabled(enabled);
         removeBtn.setEnabled(enabled);
         saveFileBtn.setEnabled(enabled);
+        loadFileBtn.setEnabled(enabled);
     }
 
     public void setManualSession(ManualControlSession session) {
         this.manualSession = session;
+    }
+
+    public File getCurrentConfigFile() {
+        return currentConfigFile;
     }
 
     // --- Internal Logic (Same as StationEditorPanel) ---
@@ -488,10 +505,10 @@ public class SettingsPanel extends JPanel {
         });
     }
 
-    private void loadFromFile() {
-        if (configFile.exists()) {
+    private void loadConfig() {
+        if (currentConfigFile.exists()) {
             try {
-                AppConfig config = mapper.readValue(configFile, AppConfig.class);
+                AppConfig config = mapper.readValue(currentConfigFile, AppConfig.class);
 
                 // Load General Settings
                 if (config.general != null) {
@@ -516,7 +533,7 @@ public class SettingsPanel extends JPanel {
 
             } catch (Exception e) {
                 e.printStackTrace();
-                JOptionPane.showMessageDialog(this, "Failed to load config.json: " + e.getMessage());
+                JOptionPane.showMessageDialog(this, "Failed to load config: " + e.getMessage());
             }
         } else if (legacyStationFile.exists()) {
             // Fallback to legacy stations.json
@@ -532,7 +549,6 @@ public class SettingsPanel extends JPanel {
                             (String) val.get("behavior")));
                 });
                 refreshTable();
-                // We don't save immediately, user must click Save to migrate.
             } catch (Exception e) {
                 e.printStackTrace();
                 JOptionPane.showMessageDialog(this, "Failed to load legacy stations.json: " + e.getMessage());
@@ -559,7 +575,24 @@ public class SettingsPanel extends JPanel {
         return 0;
     }
 
-    private void saveToFile() {
+    private void saveAs() {
+        JFileChooser fc = new JFileChooser(".");
+        fc.setSelectedFile(currentConfigFile);
+        if (fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            currentConfigFile = fc.getSelectedFile();
+            saveConfig();
+        }
+    }
+
+    private void loadFrom() {
+        JFileChooser fc = new JFileChooser(".");
+        if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            currentConfigFile = fc.getSelectedFile();
+            loadConfig();
+        }
+    }
+
+    private void saveConfig() {
         try {
             GeneralSettings gen = new GeneralSettings(
                     modelComboBox.getSelectedIndex(),
@@ -575,9 +608,9 @@ public class SettingsPanel extends JPanel {
 
             AppConfig config = new AppConfig(gen, new LinkedHashMap<>(stations));
 
-            mapper.writeValue(configFile, config);
+            mapper.writeValue(currentConfigFile, config);
             JOptionPane.showMessageDialog(this,
-                    "Configuration (Settings + Stations) saved to " + configFile.getAbsolutePath());
+                    "Configuration saved to " + currentConfigFile.getAbsolutePath());
         } catch (Exception e) {
             e.printStackTrace();
             JOptionPane.showMessageDialog(this, "Error saving file: " + e.getMessage());
