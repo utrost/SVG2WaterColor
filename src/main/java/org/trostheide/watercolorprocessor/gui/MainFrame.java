@@ -16,11 +16,7 @@ public class MainFrame extends JFrame {
         JTextArea statusArea = new JTextArea();
         statusArea.setEditable(false);
         statusArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        JScrollPane statusScroll = new JScrollPane(statusArea);
-        statusScroll.setBorder(BorderFactory.createTitledBorder("Processor Log"));
-        statusScroll.setPreferredSize(new Dimension(800, 100));
 
-        // Create Panels
         // Create Panels
         SettingsPanel settingsPanel = new SettingsPanel();
         // PlotterPanel now takes SettingsPanel to read speed configs
@@ -33,16 +29,7 @@ public class MainFrame extends JFrame {
         tabbedPane.addTab("2. Plot (Driver)", plotterPanel);
         tabbedPane.addTab("Settings", settingsPanel);
 
-        // Layout
-        // The Processor panel needs the shared status area below it,
-        // but the Plotter panel has its own integrated console.
-        // So we might want to put the status area INSIDE the processor tab, or keep it
-        // global at the bottom.
-        // Let's attach the status area to the global SOUTH, but it will mostly be used
-        // by Tab 1.
-
         add(tabbedPane, BorderLayout.CENTER);
-        add(statusScroll, BorderLayout.SOUTH);
     }
 
     public void setConnectionStatus(boolean connected) {

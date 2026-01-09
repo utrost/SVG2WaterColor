@@ -37,8 +37,17 @@ public class SettingsPanel extends JPanel {
 
     // In-memory store
     private final Map<String, StationConfig> stations = new LinkedHashMap<>();
-    private final File configFile = new File("stations.json");
+    private final File legacyStationFile = new File("stations.json");
+    private final File configFile = new File("config.json");
     private final ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+
+    // DTOs for Full Config
+    record GeneralSettings(int modelIndex, boolean mock, boolean invertX, boolean invertY, boolean swapXY,
+            boolean visualMirror, int speedDown, int speedUp, int penUp, int penDown) {
+    }
+
+    record AppConfig(GeneralSettings general, Map<String, StationConfig> stations) {
+    }
 
     // Validation/Control components for mass enabling/disabling
     private final JButton addBtn;
@@ -482,7 +491,37 @@ public class SettingsPanel extends JPanel {
     private void loadFromFile() {
         if (configFile.exists()) {
             try {
-                Map<String, Object> map = mapper.readValue(configFile, Map.class);
+                AppConfig config = mapper.readValue(configFile, AppConfig.class);
+
+                // Load General Settings
+                if (config.general != null) {
+                    modelComboBox.setSelectedIndex(config.general.modelIndex);
+                    mockCheckBox.setSelected(config.general.mock);
+                    invertXCheckBox.setSelected(config.general.invertX);
+                    invertYCheckBox.setSelected(config.general.invertY);
+                    swapXYCheckBox.setSelected(config.general.swapXY);
+                    visualMirrorCheckBox.setSelected(config.general.visualMirror);
+                    speedDownSpinner.setValue(config.general.speedDown);
+                    speedUpSpinner.setValue(config.general.speedUp);
+                    zUpSpinner.setValue(config.general.penUp);
+                    zDownSpinner.setValue(config.general.penDown);
+                }
+
+                // Load Stations
+                stations.clear();
+                if (config.stations != null) {
+                    stations.putAll(config.stations);
+                }
+                refreshTable();
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Failed to load config.json: " + e.getMessage());
+            }
+        } else if (legacyStationFile.exists()) {
+            // Fallback to legacy stations.json
+            try {
+                Map<String, Object> map = mapper.readValue(legacyStationFile, Map.class);
                 stations.clear();
                 map.forEach((k, v) -> {
                     Map<String, Object> val = (Map<String, Object>) v;
@@ -493,15 +532,19 @@ public class SettingsPanel extends JPanel {
                             (String) val.get("behavior")));
                 });
                 refreshTable();
+                // We don't save immediately, user must click Save to migrate.
             } catch (Exception e) {
                 e.printStackTrace();
-                JOptionPane.showMessageDialog(this, "Failed to load config: " + e.getMessage());
+                JOptionPane.showMessageDialog(this, "Failed to load legacy stations.json: " + e.getMessage());
             }
         } else {
             // Defaults
             stations.put("default_station", new StationConfig(5.0, 50.0, 20, "simple_dip"));
             refreshTable();
         }
+
+        // Ensure visual state is updated after load
+        fireVisualChange();
     }
 
     private double getDouble(Object o) {
@@ -518,8 +561,23 @@ public class SettingsPanel extends JPanel {
 
     private void saveToFile() {
         try {
-            mapper.writeValue(configFile, stations);
-            JOptionPane.showMessageDialog(this, "Configuration saved to " + configFile.getAbsolutePath());
+            GeneralSettings gen = new GeneralSettings(
+                    modelComboBox.getSelectedIndex(),
+                    mockCheckBox.isSelected(),
+                    invertXCheckBox.isSelected(),
+                    invertYCheckBox.isSelected(),
+                    swapXYCheckBox.isSelected(),
+                    visualMirrorCheckBox.isSelected(),
+                    (Integer) speedDownSpinner.getValue(),
+                    (Integer) speedUpSpinner.getValue(),
+                    (Integer) zUpSpinner.getValue(),
+                    (Integer) zDownSpinner.getValue());
+
+            AppConfig config = new AppConfig(gen, new LinkedHashMap<>(stations));
+
+            mapper.writeValue(configFile, config);
+            JOptionPane.showMessageDialog(this,
+                    "Configuration (Settings + Stations) saved to " + configFile.getAbsolutePath());
         } catch (Exception e) {
             e.printStackTrace();
             JOptionPane.showMessageDialog(this, "Error saving file: " + e.getMessage());

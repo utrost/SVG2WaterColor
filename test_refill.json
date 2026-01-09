@@ -1,0 +1,14 @@
+{
+    "layers": [
+        {
+            "id": "Test Refill",
+            "stationId": "default_station",
+            "commands": [
+                {
+                    "op": "REFILL",
+                    "stationId": "default_station"
+                }
+            ]
+        }
+    ]
+}

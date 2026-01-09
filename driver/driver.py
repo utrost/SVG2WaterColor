@@ -25,7 +25,7 @@ def perform_refill(ad, station_id):
         print(f"Warning: Unknown station '{station_id}'. Using default.")
         station = config.STATIONS.get("default_station")
     
-    print(f"--- REFILLING at {station_id} ---")
+    print(f"--- REFILLING at {station_id} ({station['x']} mm / {station['y']} mm) ---")
     
     # 1. Move to station
     ad.moveto(station['x'], station['y'])
@@ -131,7 +131,30 @@ def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=
     print(f"=== Layer {layer['id']} Complete ===")
 
 def load_station_config():
-    # Look for stations.json in CWD or script dir
+    # Look for config.json first (New Format), then stations.json (Old Format)
+    # in CWD or script dir
+    files_to_check = ["config.json", os.path.join(os.path.dirname(__file__), "config.json")]
+    
+    for p in files_to_check:
+        if os.path.exists(p):
+            print(f"INFO: Loading Configuration from {p}")
+            try:
+                with open(p, 'r') as f:
+                    data = json.load(f)
+                    
+                    # Check if this is a full config (has 'stations' key) or legacy (root is list/dict of stations)
+                    stations_data = data
+                    if 'stations' in data:
+                         stations_data = data['stations']
+                         
+                    # Merge into config.STATIONS or replace
+                    for k, v in stations_data.items():
+                        config.STATIONS[k] = v
+                return
+            except Exception as e:
+                print(f"ERROR: Failed to load config {p}: {e}")
+
+    # Fallback to legacy stations.json
     paths = ["stations.json", os.path.join(os.path.dirname(__file__), "stations.json")]
     for p in paths:
         if os.path.exists(p):
@@ -139,8 +162,6 @@ def load_station_config():
             try:
                 with open(p, 'r') as f:
                     data = json.load(f)
-                    # Merge into config.STATIONS or replace
-                    # We will replace entries
                     for k, v in data.items():
                         config.STATIONS[k] = v
                 return

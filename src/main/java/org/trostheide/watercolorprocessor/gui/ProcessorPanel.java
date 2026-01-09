@@ -111,6 +111,17 @@ public class ProcessorPanel extends JPanel {
         processBtn.setPreferredSize(new Dimension(150, 40));
         processBtn.addActionListener(e -> startProcessing());
         add(processBtn, gbc);
+
+        // Row 6: Log Area
+        gbc.gridx = 0;
+        gbc.gridy = 6;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0; // Fill remaining vertical space
+        gbc.gridwidth = 3;
+        gbc.fill = GridBagConstraints.BOTH;
+        JScrollPane scrollPane = new JScrollPane(statusArea);
+        scrollPane.setBorder(BorderFactory.createTitledBorder("Processor Log"));
+        add(scrollPane, gbc);
     }
 
     private void selectFile(JTextField target, boolean save) {
