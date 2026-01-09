@@ -192,6 +192,9 @@ public class PlotterPanel extends JPanel {
         if (settingsPanel.isInvertX()) {
             cmd.add("--invert-x");
         }
+        if (settingsPanel.isInvertY()) {
+            cmd.add("--invert-y");
+        }
         if (settingsPanel.isSwapXY()) {
             cmd.add("--swap-xy");
         }
@@ -341,6 +344,8 @@ public class PlotterPanel extends JPanel {
                 cmd.add("--verbose");
             if (settingsPanel.isInvertX())
                 cmd.add("--invert-x");
+            if (settingsPanel.isInvertY())
+                cmd.add("--invert-y");
             if (settingsPanel.isSwapXY())
                 cmd.add("--swap-xy");
             // Model/Speed settings are set once at startup of server, might get stale if

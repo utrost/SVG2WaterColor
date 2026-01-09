@@ -50,7 +50,7 @@ def perform_refill(ad, station_id):
         
     print("--- Refill Complete ---")
 
-def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=False, swap_xy=False):
+def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=False, invert_y=False, swap_xy=False):
     print(f"\n=== Starting Layer: {layer['id']} (Station: {layer['stationId']}) ===")
     input("Press Enter to start this layer (Ensure correct paint is ready)...")
     
@@ -58,7 +58,28 @@ def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=
     # Model 2 (V3 A3): X ~430, Y ~297
     maxX = 300.0 if model == 1 else 430.0
     maxY = 215.0 if model == 1 else 297.0
-
+    
+    # If we are swapping XY, then the "Y" axis that we might invert is actually physically X?
+    # Let's clarify the logic.
+    # Standard: X is Horizontal (Long), Y is Vertical (Short).
+    # Invert X: Mirror Horizontal.
+    # Invert Y: Mirror Vertical.
+    # Swap XY: X becomes Vertical, Y becomes Horizontal.
+    #
+    # The transform order is crucial.
+    # Usually: 1. Swap? 2. Invert?
+    # The current code does: 1. Swap 2. Invert Physical X.
+    #
+    # If we want "Invert Y" to mean "Invert the axis that IS Y in the SVG", then we should do it BEFORE Swap?
+    # Or probably "Invert Physical Y" (the axis that is Y on the machine).
+    #
+    # Existing 'invert_x' implementation:
+    # 1. Swap (if set): px, py = ty, tx
+    # 2. Invert Physical X (if set): px = maxX - px
+    #
+    # So 'invert_x' here means "Invert the coordinate mapped to the Machine X axis".
+    # Therefore, 'invert_y' should mean "Invert the coordinate mapped to the Machine Y axis".
+    
     def transform_point(tx, ty):
         # 1. Swap if requested
         if swap_xy:
@@ -69,6 +90,10 @@ def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=
         # 2. Invert Physical X if requested
         if invert_x:
             px = maxX - px
+            
+        # 3. Invert Physical Y if requested
+        if invert_y:
+            py = maxY - py
             
         return px, py
 
@@ -126,6 +151,7 @@ def main():
     parser = argparse.ArgumentParser(description='Watercolor Driver')
     parser.add_argument('input', nargs='?', help='Input JSON file (optional if --manual-pen used)')
     parser.add_argument('--invert-x', action='store_true', help='Invert X Axis (Mirror Plot) for standard SVGs')
+    parser.add_argument('--invert-y', action='store_true', help='Invert Y Axis (Mirror Plot)')
     parser.add_argument('--swap-xy', action='store_true', help='Swap X and Y Axis')
     parser.add_argument('--mock', action='store_true', help='Force Mock Mode')
     parser.add_argument('--verbose', action='store_true', help='Enable verbose logging')
@@ -326,7 +352,7 @@ def main():
 
     if args.input:
         data = load_json(args.input)
-        print(f"INFO: Plot Configuration -> Invert X: {args.invert_x}, Swap X/Y: {args.swap_xy}")
+        print(f"INFO: Plot Configuration -> Invert X: {args.invert_x}, Invert Y: {args.invert_y}, Swap X/Y: {args.swap_xy}")
     elif not args.interactive_server and not args.manual_pen:
         print("ERROR: No input file specified for plot mode.")
         sys.exit(1)
@@ -334,7 +360,7 @@ def main():
     try:
         print(f"DEBUG: ad.options.units = {ad.options.units} (Should be 2 for mm)")
         for layer in data['layers']:
-            execute_layer(ad, layer, report_pos=args.report_position, verbose=args.verbose, model=args.model, invert_x=args.invert_x, swap_xy=args.swap_xy)
+            execute_layer(ad, layer, report_pos=args.report_position, verbose=args.verbose, model=args.model, invert_x=args.invert_x, invert_y=args.invert_y, swap_xy=args.swap_xy)
             
         # Return to home
         print("\nPlot Complete. Returning Home.")

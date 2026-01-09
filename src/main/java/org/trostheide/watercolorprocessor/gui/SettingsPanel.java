@@ -19,6 +19,7 @@ public class SettingsPanel extends JPanel {
     private JSpinner zUpSpinner;
     private JSpinner zDownSpinner;
     private final JCheckBox invertXCheckBox;
+    private final JCheckBox invertYCheckBox;
     private final JCheckBox swapXYCheckBox;
     private final JCheckBox visualMirrorCheckBox;
     private final JComboBox<String> modelComboBox;
@@ -91,6 +92,14 @@ public class SettingsPanel extends JPanel {
                 manualSession.resetServer();
         });
         generalPanel.add(invertXCheckBox);
+
+        // Invert Y
+        invertYCheckBox = new JCheckBox("Invert Y", false);
+        invertYCheckBox.addActionListener(e -> {
+            if (manualSession != null)
+                manualSession.resetServer();
+        });
+        generalPanel.add(invertYCheckBox);
 
         // Swap XY
         swapXYCheckBox = new JCheckBox("Swap X/Y", true); // Default true based on calibration
@@ -383,6 +392,10 @@ public class SettingsPanel extends JPanel {
         return invertXCheckBox.isSelected();
     }
 
+    public boolean isInvertY() {
+        return invertYCheckBox.isSelected();
+    }
+
     public boolean isSwapXY() {
         return swapXYCheckBox.isSelected();
     }
@@ -399,6 +412,7 @@ public class SettingsPanel extends JPanel {
         zDownSpinner.setEnabled(enabled);
         mockCheckBox.setEnabled(enabled);
         invertXCheckBox.setEnabled(enabled);
+        invertYCheckBox.setEnabled(enabled);
         swapXYCheckBox.setEnabled(enabled);
         visualMirrorCheckBox.setEnabled(enabled);
 
