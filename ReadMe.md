@@ -190,8 +190,31 @@ To run the driver on a Windows machine connected to the plotter:
     pip install -r driver\requirements.txt
     ```
     *(Note: You may need to install the official AxiDraw software which includes the API)*
-3.  **Run the Driver:**
-    Use the provided batch script:
-    ```cmd
-    run_driver.bat simpleSampleSVG.json
-    ```
+### 5.1 Run the Driver (CLI)
+
+You can run the driver directly from the command line (headless mode) using `run_driver.bat` or Python.
+
+**Basic Usage:**
+```cmd
+python driver/driver.py path/to/commands.json [OPTIONS]
+```
+
+**Key Features:**
+*   **Auto-Configuration:** If you do not specify speed or orientation flags, the driver automatically loads them from `config.json` (or your custom config file). This ensures parity with your GUI settings.
+*   **Custom Config:** Use `--config my_settings.json` to load a specific configuration file.
+
+**Available Arguments:**
+*   `--invert-y`: Mirror the plot vertically (fix for some plotters).
+*   `--swap-xy`: Swap X and Y axes.
+*   `--mock`: Run in simulation mode (no hardware required).
+*   `--verbose`: Show detailed logs.
+*   `--speed-down [1-100]`: Drawing speed %.
+*   `--speed-up [1-100]`: Travel speed %.
+*   `--pen-up [0-100]`: Height when moving.
+*   `--pen-down [0-100]`: Height when drawing.
+
+**Example:**
+Run a plot using "project_A.json" for settings, but force a specific speed:
+```cmd
+python driver/driver.py input.json --config project_A.json --speed-down 50
+```

@@ -149,7 +149,7 @@ def load_station_config(custom_path=None):
                 with open(p, 'r') as f:
                     data = json.load(f)
                     
-                    # Check if this is a full config (has 'stations' key) or legacy (root is list/dict of stations)
+                    # 1. Load Stations
                     stations_data = data
                     if 'stations' in data:
                          stations_data = data['stations']
@@ -157,7 +157,12 @@ def load_station_config(custom_path=None):
                     # Merge into config.STATIONS or replace
                     for k, v in stations_data.items():
                         config.STATIONS[k] = v
-                return
+
+                    # 2. Return General Settings if present
+                    if 'general' in data:
+                        return data['general']
+                
+                return {} # Return empty dict if no general settings found but file loaded
             except Exception as e:
                 print(f"ERROR: Failed to load config {p}: {e}")
 
@@ -197,7 +202,38 @@ def main():
     args = parser.parse_args()
 
     # Load Station Config Early
-    load_station_config(getattr(args, 'config', None))
+    loaded_general = load_station_config(getattr(args, 'config', None))
+
+    # Apply defaults from loaded config if CLI args are not explicit user overrides
+    # (Since argparse defaults are set, we might overwrite them if we just trust loaded_general.
+    # But usually we prioritize CLI > Config > Hardcoded defaults.
+    # However, since argparse sets defaults (e.g. speed=25), we can't easily distinguish "user didn't set" vs "default".
+    # Strategy: If loaded_general has a value, update the args namespace IF the user didn't specify it? 
+    # Actually, argparse is parsed already. We can just set the values if they exist in config, 
+    # BUT we should only do so if we want config to override default. 
+    # For a CLI, explicit flags > config file > defaults. 
+    # Since we can't tell if '25' came from user or default easily without complex argparse usage,
+    # we will trust the Config file values to update our "defaults" logic below, OR explicitly update `args` here.)
+
+    if loaded_general:
+        # Map config keys to args keys
+        # Config: modelIndex, mock, invertX, invertY, swapXY, visualMirror, speedDown, speedUp, penUp, penDown
+        if 'mock' in loaded_general and not args.mock: args.mock = loaded_general['mock']
+        if 'invertX' in loaded_general and not args.invert_x: args.invert_x = loaded_general['invertX']
+        if 'invertY' in loaded_general and not args.invert_y: args.invert_y = loaded_general['invertY']
+        if 'swapXY' in loaded_general and not args.swap_xy: args.swap_xy = loaded_general['swapXY']
+        
+        # Model (0=A4, 1=A3) -> Arg is 1 or 2
+        if 'modelIndex' in loaded_general: args.model = loaded_general['modelIndex'] + 1
+        
+        # Speeds (If not default? Or always overwrite if in config?)
+        # Let's overwrite if in config, assuming config is "persistent default"
+        if 'speedDown' in loaded_general: args.speed_down = loaded_general['speedDown']
+        if 'speedUp' in loaded_general: args.speed_up = loaded_general['speedUp']
+        if 'penUp' in loaded_general: args.pen_up = loaded_general['penUp']
+        if 'penDown' in loaded_general: args.pen_down = loaded_general['penDown']
+
+    print(f"INFO: Active Configuration -> Model: {args.model}, Mock: {args.mock}, InvertX: {args.invert_x}, InvertY: {args.invert_y}, SwapXY: {args.swap_xy}")
 
     # Initialize Driver
     if args.mock:
