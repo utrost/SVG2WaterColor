@@ -13,23 +13,34 @@ public class WatercolorProcessor {
         Options options = new Options();
 
         options.addOption(Option.builder("i").longOpt("input").hasArg().required(true).desc("Input SVG file.").build());
-        options.addOption(Option.builder("o").longOpt("output").hasArg().required(true).desc("Output JSON file.").build());
-        options.addOption(Option.builder("d").longOpt("max-dist").hasArg().required(true).desc("Max draw distance (mm).").build());
+        options.addOption(
+                Option.builder("o").longOpt("output").hasArg().required(true).desc("Output JSON file.").build());
+        options.addOption(Option.builder("d").longOpt("max-dist").hasArg().required(true)
+                .desc("Max draw distance (mm).").build());
 
-        // Changed: Station is no longer strictly required by CLI, as layers might define it.
+        // Changed: Station is no longer strictly required by CLI, as layers might
+        // define it.
         // We will treat it as a required DEFAULT if layers are unnamed.
         options.addOption(Option.builder("s").longOpt("station")
                 .hasArg()
                 .desc("Default Refill Station ID (used if layers are unnamed).")
                 .build());
 
-        options.addOption(Option.builder("c").longOpt("curve-step").hasArg().desc("Curve linearization step (mm).").build());
+        options.addOption(
+                Option.builder("c").longOpt("curve-step").hasArg().desc("Curve linearization step (mm).").build());
+        options.addOption(
+                Option.builder("f").longOpt("fit-to").hasArg().desc("Fit to paper format (A4, A3, A5, XL).").build());
+        options.addOption(
+                Option.builder("p").longOpt("padding").hasArg().desc("Padding for fit-to (mm). Default 10.").build());
         options.addOption(Option.builder("h").longOpt("help").desc("Help").build());
 
         CommandLineParser parser = new DefaultParser();
         try {
             CommandLine cmd = parser.parse(options, args);
-            if (cmd.hasOption("h")) { printHelp(options); return; }
+            if (cmd.hasOption("h")) {
+                printHelp(options);
+                return;
+            }
 
             File inputFile = new File(cmd.getOptionValue("input"));
             File outputFile = new File(cmd.getOptionValue("output"));
@@ -41,11 +52,16 @@ public class WatercolorProcessor {
 
             validateInputs(inputFile, maxDrawDistance, curveApproximation);
 
-            logger.info("Configuration Verified: Input={}, Output={}, MaxDist={}, DefaultStation={}",
-                    inputFile.getName(), outputFile.getName(), maxDrawDistance, defaultStationId);
+            String fitToFormat = cmd.getOptionValue("fit-to");
+            double padding = Double.parseDouble(cmd.getOptionValue("padding", "10.0"));
+
+            logger.info(
+                    "Configuration Verified: Input={}, Output={}, MaxDist={}, DefaultStation={}, FitTo={}, Padding={}",
+                    inputFile.getName(), outputFile.getName(), maxDrawDistance, defaultStationId, fitToFormat, padding);
 
             ProcessorService service = new ProcessorService();
-            service.process(inputFile, outputFile, maxDrawDistance, defaultStationId, curveApproximation);
+            service.process(inputFile, outputFile, maxDrawDistance, defaultStationId, curveApproximation, fitToFormat,
+                    padding);
 
             logger.info("Processing complete.");
 
@@ -61,8 +77,11 @@ public class WatercolorProcessor {
     }
 
     private static void validateInputs(File in, double dist, double curve) {
-        if (!in.exists()) throw new IllegalArgumentException("Input file missing: " + in);
-        if (dist <= 0) throw new IllegalArgumentException("Max distance must be positive.");
-        if (curve <= 0.01) throw new IllegalArgumentException("Curve step too small.");
+        if (!in.exists())
+            throw new IllegalArgumentException("Input file missing: " + in);
+        if (dist <= 0)
+            throw new IllegalArgumentException("Max distance must be positive.");
+        if (curve <= 0.01)
+            throw new IllegalArgumentException("Curve step too small.");
     }
 }

@@ -9,12 +9,22 @@ import org.apache.batik.parser.PathParser;
 import org.apache.batik.util.XMLResourceDescriptor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.trostheide.watercolorprocessor.dto.*;
-import org.trostheide.watercolorprocessor.dto.command.*;
+import org.trostheide.watercolorprocessor.dto.Bounds;
+import org.trostheide.watercolorprocessor.dto.Layer;
+import org.trostheide.watercolorprocessor.dto.Point;
+import org.trostheide.watercolorprocessor.dto.ProcessorOutput;
+import org.trostheide.watercolorprocessor.dto.Metadata;
+import org.trostheide.watercolorprocessor.dto.command.Command;
+import org.trostheide.watercolorprocessor.dto.command.DrawCommand;
+import org.trostheide.watercolorprocessor.dto.command.MoveCommand;
+import org.trostheide.watercolorprocessor.dto.command.RefillCommand;
 import org.w3c.dom.*;
 
 import java.awt.Shape;
+import java.awt.geom.AffineTransform;
 import java.awt.geom.PathIterator;
+import org.apache.batik.parser.AWTTransformProducer;
+import org.apache.batik.parser.TransformListParser;
 import java.io.File;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -39,8 +49,13 @@ public class ProcessorService {
     }
 
     public void process(File inputFile, File outputFile, double maxDrawDistance, String defaultStationId,
-            double curveApproximation) {
+            double curveApproximation, String fitToFormatStr, double padding) {
         logger.info("Starting processing for: {}", inputFile.getName());
+
+        PaperFormat fitToFormat = PaperFormat.fromString(fitToFormatStr);
+        if (fitToFormatStr != null && fitToFormat == null) {
+            logger.warn("Unknown paper format '{}'. Skipping auto-scaling.", fitToFormatStr);
+        }
 
         try {
             // 1. Load SVG
@@ -51,9 +66,20 @@ public class ProcessorService {
             // 2. Identify Layers
             List<LayerProcessingContext> layersToProcess = identifyLayers(doc, defaultStationId);
 
-            // 3. Process Each Layer
+            // 3. Pre-scan for bounds (if auto-scaling is active)
+            AffineTransform globalTx = new AffineTransform();
+
+            if (fitToFormat != null) {
+                Bounds preScannedBounds = calculateGlobalBounds(layersToProcess);
+                if (preScannedBounds != null) {
+                    globalTx = calculateFitToPageTransform(preScannedBounds, fitToFormat, padding);
+                }
+            }
+
+            // 4. Process Each Layer
             List<Layer> resultLayers = new ArrayList<>();
-            BoundsBuilder globalBounds = new BoundsBuilder();
+            // We use globalBounds to track the FINAL bounds
+            BoundsBuilder globalBoundsBuilder = new BoundsBuilder();
             PathParser pathParser = new PathParser();
             AWTPathProducer pathProducer = new AWTPathProducer();
             pathParser.setPathHandler(pathProducer);
@@ -70,7 +96,8 @@ public class ProcessorService {
                         curveApproximation,
                         pathParser,
                         pathProducer,
-                        globalBounds);
+                        globalBoundsBuilder,
+                        globalTx); // Pass the transform!
 
                 if (!layerCommands.isEmpty()) {
                     resultLayers.add(new Layer(ctx.layerName, ctx.stationId, layerCommands));
@@ -87,7 +114,7 @@ public class ProcessorService {
                     "MULTI_LAYER", // Station ID is now per-layer
                     "mm",
                     totalCommands,
-                    globalBounds.build());
+                    globalBoundsBuilder.build());
 
             ProcessorOutput output = new ProcessorOutput(metadata, resultLayers);
 
@@ -103,6 +130,30 @@ public class ProcessorService {
     }
 
     // --- Layer Identification ---
+
+    public record PaperFormat(double width, double height) {
+        public static final PaperFormat A5 = new PaperFormat(148, 210);
+        public static final PaperFormat A4 = new PaperFormat(210, 297);
+        public static final PaperFormat A3 = new PaperFormat(297, 420);
+        public static final PaperFormat XL = new PaperFormat(430, 600); // Rough XL size
+
+        public static PaperFormat fromString(String s) {
+            if (s == null)
+                return null;
+            switch (s.toUpperCase()) {
+                case "A5":
+                    return A5;
+                case "A4":
+                    return A4;
+                case "A3":
+                    return A3;
+                case "XL":
+                    return XL;
+                default:
+                    return null;
+            }
+        }
+    }
 
     private record LayerProcessingContext(String layerName, String stationId, Element rootNode) {
     }
@@ -152,7 +203,7 @@ public class ProcessorService {
 
     private List<Command> generateCommandsForLayer(Element layerRoot, String stationId, double maxDist,
             double curveStep,
-            PathParser parser, AWTPathProducer producer, BoundsBuilder bounds) {
+            PathParser parser, AWTPathProducer producer, BoundsBuilder bounds, AffineTransform globalTx) {
         List<Command> cmds = new ArrayList<>();
         List<Node> drawables = new ArrayList<>();
         collectDrawableElements(layerRoot, drawables);
@@ -171,6 +222,15 @@ public class ProcessorService {
 
             parser.parse(d);
             Shape shape = producer.getShape();
+
+            // Apply SVG Transform if present
+            shape = applyElementTransform(node, shape);
+
+            // Apply Auto-Scale Transform
+            if (globalTx != null && !globalTx.isIdentity()) {
+                shape = globalTx.createTransformedShape(shape);
+            }
+
             PathIterator pi = shape.getPathIterator(null, curveStep);
 
             double[] coords = new double[6];
@@ -287,12 +347,7 @@ public class ProcessorService {
         Element el = (Element) node;
         String tagName = el.getTagName();
 
-        if (el.hasAttribute("transform")) {
-            // Warn once per element but skip to avoid complex matrix math implementation in
-            // this iteration
-            logger.warn("Skipping transformed element '{}'. Convert to path in Inkscape first.", tagName);
-            return null;
-        }
+        // Transform check removed to support transformed elements
 
         try {
             if ("path".equals(tagName))
@@ -380,6 +435,13 @@ public class ProcessorService {
         double maxX = Double.MIN_VALUE;
         double maxY = Double.MIN_VALUE;
 
+        void reset() {
+            minX = Double.MAX_VALUE;
+            minY = Double.MAX_VALUE;
+            maxX = Double.MIN_VALUE;
+            maxY = Double.MIN_VALUE;
+        }
+
         void add(double x, double y) {
             if (x < minX)
                 minX = x;
@@ -396,5 +458,96 @@ public class ProcessorService {
                 return Bounds.empty();
             return new Bounds(minX, minY, maxX, maxY);
         }
+    }
+
+    // --- Auto-Scaling Logic ---
+
+    private Bounds calculateGlobalBounds(List<LayerProcessingContext> contexts) {
+        BoundsBuilder builder = new BoundsBuilder();
+        PathParser parser = new PathParser();
+        AWTPathProducer producer = new AWTPathProducer();
+        parser.setPathHandler(producer);
+
+        for (LayerProcessingContext ctx : contexts) {
+            List<Node> drawables = new ArrayList<>();
+            collectDrawableElements(ctx.rootNode, drawables);
+            for (Node node : drawables) {
+                String d = getRawPathData(node);
+                if (d == null)
+                    continue;
+                try {
+                    parser.parse(d);
+                    Shape shape = producer.getShape();
+                    // Apply element transform
+                    shape = applyElementTransform(node, shape);
+                    // Add current shape bounds to builder
+                    java.awt.Rectangle r = shape.getBounds();
+                    // getBounds is int, getBounds2D is double. Let's strictly iterate path to be
+                    // 100% precise or use Bounds2D
+                    java.awt.geom.Rectangle2D r2d = shape.getBounds2D();
+                    builder.add(r2d.getMinX(), r2d.getMinY());
+                    builder.add(r2d.getMaxX(), r2d.getMaxY());
+                } catch (Exception e) {
+                    // ignore
+                }
+            }
+        }
+        return builder.build();
+    }
+
+    private AffineTransform calculateFitToPageTransform(Bounds contentBounds, PaperFormat format, double padding) {
+        if (contentBounds.minX() == Double.MAX_VALUE)
+            return new AffineTransform();
+
+        double contentWidth = contentBounds.maxX() - contentBounds.minX();
+        double contentHeight = contentBounds.maxY() - contentBounds.minY();
+
+        double targetWidth = format.width() - (padding * 2);
+        double targetHeight = format.height() - (padding * 2);
+
+        if (targetWidth <= 0 || targetHeight <= 0) {
+            logger.warn("Padding is too large for the selected format!");
+            return new AffineTransform();
+        }
+
+        double scaleX = targetWidth / contentWidth;
+        double scaleY = targetHeight / contentHeight;
+        double scale = Math.min(scaleX, scaleY);
+
+        logger.info("Auto-Scale Calculation: Content={}x{}, Target={}x{}, Scale={}",
+                contentWidth, contentHeight, targetWidth, targetHeight, scale);
+
+        double offsetX = padding + (targetWidth - (contentWidth * scale)) / 2.0;
+        double offsetY = padding + (targetHeight - (contentHeight * scale)) / 2.0;
+
+        AffineTransform tx = new AffineTransform();
+        // 3. Translate to Final Position
+        tx.translate(offsetX, offsetY);
+        // 2. Scale
+        tx.scale(scale, scale);
+        // 1. Translate to Origin (so 0,0 is logical top-left of content)
+        tx.translate(-contentBounds.minX(), -contentBounds.minY());
+
+        return tx;
+    }
+
+    private Shape applyElementTransform(Node node, Shape shape) {
+        if (node.getNodeType() == Node.ELEMENT_NODE) {
+            Element ie = (Element) node;
+            if (ie.hasAttribute("transform")) {
+                try {
+                    String tVal = ie.getAttribute("transform");
+                    TransformListParser tParser = new TransformListParser();
+                    AWTTransformProducer tProducer = new AWTTransformProducer();
+                    tParser.setTransformListHandler(tProducer);
+                    tParser.parse(tVal);
+                    AffineTransform tx = tProducer.getAffineTransform();
+                    return tx.createTransformedShape(shape);
+                } catch (Exception ex) {
+                    // warn
+                }
+            }
+        }
+        return shape;
     }
 }

@@ -38,6 +38,8 @@ The Java application requires a configuration object (passed via CLI):
 | maxDrawDistance (-d) | Double | Maximum distance (mm) the brush can travel before requiring a refill. |
 | defaultStationId (-s) | String | Fallback Station ID used if SVG layers are unnamed or missing. |
 | curveApproximation (-c) | Double | Step size (mm) for linearizing curves. Default: 0.5. |
+| fitToFormat (-f) | String | Target paper format to auto-scale input (A5, A4, A3, XL). Default: None. |
+| padding (-p) | Double | Margin (mm) when using fit-to-format. Default: 10.0. |
 
 ### **2.1.1 GUI Mode**
 
@@ -56,16 +58,16 @@ The GUI now includes a dedicated **Settings** tab for managing plotter hardware 
         *   **Visual Mirror:** Adjusts the on-screen preview to match your physical setup.
     *   **Pen Up/Down:** Calibrate the Z-axis height (percentage) for drawing and travelling.
     *   **Speeds:** Adjust Draw and Travel speeds to optimize for ink flow.
+*   **Manual Control:**
+    *   **Jog Controls:** Use the on-screen directional buttons (or arrow keys) to manually move the plotter head.
+    *   **Pen Testing:** Use **Test UP** and **Test DOWN** to physically verify pen heights.
 *   **Configuration Management:**
     *   **Save/Load Config:** Save your entire setup (Stations + Settings) to custom `.json` files (e.g., `project_A.json`).
     *   **Active Config Display:** The currently loaded configuration file is displayed above the buttons.
-*   **Manual Control:**
-    *   Use the **Test UP** and **Test DOWN** buttons to physically verify pen heights.
-    *   Use the arrow buttons to jog the plotter head.
 *   **Station Management:** Configure the physical location (X, Y) and behavior of paint refill stations.
 
 ### **2.1.2 Interface Improvements**
-*   **Processor Log:** The processing output log is now exclusively visible in the **"1. Process SVG"** tab to reduce clutter.
+*   **Process SVG Tab:** Now includes **Auto-Scaling** options ("Fit to Page") to automatically resize and center your design on A4, A3, or XL paper.
 *   **Driver Logs:** The console output now explicitly lists the target coordinates `(x mm / y mm)` when performing a Refill, confirming that your custom station settings are being used.
 
 ### **2.2 Functional Logic**
@@ -77,8 +79,10 @@ The GUI now includes a dedicated **Settings** tab for managing plotter hardware 
 2. **Primitive Normalization:**
     * Recursively collects drawable elements.
     * Automatically converts primitives (\<rect\>, \<circle\>, \<ellipse\>, \<line\>, \<polyline\>, \<polygon\>) into standard SVG Path definitions (d="...").
-3. **Linearization:**
+3. **Linearization & Scaling:**
+    * Applies global transforms (if "Fit to Page" is selected).
     * Converts all paths into a simplified list of PolyLines (sequences of X,Y points) using PathIterator.
+    * *Note:* Refill distances are calculated based on the *scaled* physical dimensions, ensuring consistent ink usage regardless of the input SVG size.
 4. **Segmentation & Refill Insertion:**
     * Iterates through the geometry of *each layer*.
     * **Initial Refill:** Inserts a REFILL command at the start of every layer.
@@ -212,6 +216,9 @@ python driver/driver.py path/to/commands.json [OPTIONS]
 *   `--speed-up [1-100]`: Travel speed %.
 *   `--pen-up [0-100]`: Height when moving.
 *   `--pen-down [0-100]`: Height when drawing.
+*   `--manual-pen [UP|DOWN]`: Manually raise/lower pen and exit.
+*   `--move-x [mm]`, `--move-y [mm]`: Manually move the head relative to current position.
+*   `--interactive-server`: Start a persistent server process for receiving commands (used by GUI).
 
 **Example:**
 Run a plot using "project_A.json" for settings, but force a specific speed:

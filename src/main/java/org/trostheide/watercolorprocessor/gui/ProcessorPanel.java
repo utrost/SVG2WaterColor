@@ -12,6 +12,8 @@ public class ProcessorPanel extends JPanel {
     private final JSpinner maxDistSpinner;
     private final JSpinner curveStepSpinner;
     private final JTextField stationField;
+    private final JComboBox<String> formatCombo;
+    private final JSpinner paddingSpinner;
     private final JTextArea statusArea;
 
     public ProcessorPanel(JTextArea statusArea) {
@@ -99,9 +101,36 @@ public class ProcessorPanel extends JPanel {
         stationField = new JTextField("default_station");
         add(stationField, gbc);
 
-        // Row 5: Process Button
+        // Row 5: Fit To Format
         gbc.gridx = 0;
         gbc.gridy = 5;
+        gbc.weightx = 0.1;
+        gbc.gridwidth = 1;
+        add(new JLabel("Fit to Page:"), gbc);
+
+        gbc.gridx = 1;
+        gbc.weightx = 0.9;
+        gbc.gridwidth = 2;
+        formatCombo = new JComboBox<>(new String[] { "None", "A5", "A4", "A3", "XL" });
+        formatCombo.setSelectedItem("None");
+        add(formatCombo, gbc);
+
+        // Row 6: Padding
+        gbc.gridx = 0;
+        gbc.gridy = 6;
+        gbc.weightx = 0.1;
+        gbc.gridwidth = 1;
+        add(new JLabel("Padding (mm):"), gbc);
+
+        gbc.gridx = 1;
+        gbc.weightx = 0.9;
+        gbc.gridwidth = 2;
+        paddingSpinner = new JSpinner(new SpinnerNumberModel(10.0, 0.0, 100.0, 1.0));
+        add(paddingSpinner, gbc);
+
+        // Row 7: Process Button
+        gbc.gridx = 0;
+        gbc.gridy = 7;
         gbc.weightx = 1.0;
         gbc.gridwidth = 3;
         gbc.fill = GridBagConstraints.NONE;
@@ -112,9 +141,9 @@ public class ProcessorPanel extends JPanel {
         processBtn.addActionListener(e -> startProcessing());
         add(processBtn, gbc);
 
-        // Row 6: Log Area
+        // Row 8: Log Area
         gbc.gridx = 0;
-        gbc.gridy = 6;
+        gbc.gridy = 8;
         gbc.weightx = 1.0;
         gbc.weighty = 1.0; // Fill remaining vertical space
         gbc.gridwidth = 3;
@@ -166,12 +195,18 @@ public class ProcessorPanel extends JPanel {
         }
 
         statusArea.setText("");
+        String selectedFormat = (String) formatCombo.getSelectedItem();
+        if ("None".equals(selectedFormat))
+            selectedFormat = null;
+
         ProcessingWorker worker = new ProcessingWorker(
                 inFile,
                 outFile,
                 (Double) maxDistSpinner.getValue(),
                 (Double) curveStepSpinner.getValue(),
                 stationField.getText(),
+                selectedFormat,
+                (Double) paddingSpinner.getValue(),
                 statusArea);
         worker.execute();
     }
