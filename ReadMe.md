@@ -41,6 +41,11 @@ The Java application requires a configuration object (passed via CLI):
 | fitToFormat (-f) | String | Target paper format to auto-scale input (A5, A4, A3, XL). Default: None. |
 | padding (-p) | Double | Margin (mm) when using fit-to-format. Default: 10.0. |
 
+**CLI Example:**
+```bash
+java -jar target/watercolor-processor.jar -i input.svg -o output.json -f A4 -p 10
+```
+
 ### **2.1.1 GUI Mode**
 
 Start the Swing GUI to configure parameters visually:

@@ -82,27 +82,41 @@ public class SettingsPanel extends JPanel {
         setBorder(new EmptyBorder(10, 10, 10, 10));
 
         // --- NORTH: General Settings ---
-        JPanel generalPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 20, 10));
+        JPanel generalPanel = new JPanel(new GridBagLayout());
         generalPanel.setBorder(BorderFactory.createTitledBorder("General Plotter Settings"));
+        GridBagConstraints gbcGen = new GridBagConstraints();
+        gbcGen.insets = new Insets(5, 10, 5, 10);
+        gbcGen.anchor = GridBagConstraints.WEST;
+        gbcGen.fill = GridBagConstraints.NONE;
+
+        // Row 1: Model & Orientation Flags
+        gbcGen.gridx = 0;
+        gbcGen.gridy = 0;
 
         // Plotter Size
-        generalPanel.add(new JLabel("Plotter Size:"));
+        JPanel modelPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        modelPanel.add(new JLabel("Plotter Size:"));
         modelComboBox = new JComboBox<>(new String[] { "Standard (A4 / V3)", "Large (A3 / V3 XL)" });
         modelComboBox.setSelectedIndex(1); // Default to A3
-        generalPanel.add(modelComboBox);
+        modelPanel.add(modelComboBox);
+        generalPanel.add(modelPanel, gbcGen);
+
+        // Flags
+        gbcGen.gridx = 1;
+        gbcGen.weightx = 1.0;
+        JPanel flagsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
 
         // Mock Mode
         mockCheckBox = new JCheckBox("Mock Mode", false);
-        generalPanel.add(mockCheckBox);
+        flagsPanel.add(mockCheckBox);
 
         // Invert X
-        invertXCheckBox = new JCheckBox("Invert X (0,0 Top-Right)", false); // Default false based on user feedback
-                                                                            // (Invert logic moves to Far Left)
+        invertXCheckBox = new JCheckBox("Invert X (0,0 Top-Right)", false);
         invertXCheckBox.addActionListener(e -> {
             if (manualSession != null)
                 manualSession.resetServer();
         });
-        generalPanel.add(invertXCheckBox);
+        flagsPanel.add(invertXCheckBox);
 
         // Invert Y
         invertYCheckBox = new JCheckBox("Invert Y", false);
@@ -110,32 +124,44 @@ public class SettingsPanel extends JPanel {
             if (manualSession != null)
                 manualSession.resetServer();
         });
-        generalPanel.add(invertYCheckBox);
+        flagsPanel.add(invertYCheckBox);
 
         // Swap XY
-        swapXYCheckBox = new JCheckBox("Swap X/Y", true); // Default true based on calibration
+        swapXYCheckBox = new JCheckBox("Swap X/Y", true);
         swapXYCheckBox.addActionListener(e -> {
             if (manualSession != null)
                 manualSession.resetServer();
             fireVisualChange();
         });
-        generalPanel.add(swapXYCheckBox);
+        flagsPanel.add(swapXYCheckBox);
 
         // Visual Mirror
-        JCheckBox visualMirrorCheckBox = new JCheckBox("View: 0,0 Top-Right", true); // Default true for this user
+        JCheckBox visualMirrorCheckBox = new JCheckBox("View: 0,0 Top-Right", true);
         visualMirrorCheckBox.addActionListener(e -> fireVisualChange());
-        generalPanel.add(visualMirrorCheckBox);
+        flagsPanel.add(visualMirrorCheckBox);
         this.visualMirrorCheckBox = visualMirrorCheckBox;
 
+        generalPanel.add(flagsPanel, gbcGen);
+
+        // Row 2: Speeds
+        gbcGen.gridx = 0;
+        gbcGen.gridy = 1;
+        gbcGen.gridwidth = 2;
+        gbcGen.weightx = 0.0;
+
+        JPanel speedPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 20, 0));
+
         // Speed Down
-        generalPanel.add(new JLabel("Draw Speed (%):"));
+        speedPanel.add(new JLabel("Draw Speed (%):"));
         speedDownSpinner = new JSpinner(new SpinnerNumberModel(25, 1, 100, 1));
-        generalPanel.add(speedDownSpinner);
+        speedPanel.add(speedDownSpinner);
 
         // Speed Up
-        generalPanel.add(new JLabel("Travel Speed (%):"));
+        speedPanel.add(new JLabel("Travel Speed (%):"));
         speedUpSpinner = new JSpinner(new SpinnerNumberModel(75, 1, 100, 1));
-        generalPanel.add(speedUpSpinner);
+        speedPanel.add(speedUpSpinner);
+
+        generalPanel.add(speedPanel, gbcGen);
 
         add(generalPanel, BorderLayout.NORTH);
 
