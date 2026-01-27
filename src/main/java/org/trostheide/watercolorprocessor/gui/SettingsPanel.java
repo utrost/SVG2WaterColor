@@ -632,7 +632,15 @@ public class SettingsPanel extends JPanel {
         }
     }
 
+    public void saveConfigSilent() {
+        saveConfig(false);
+    }
+
     private void saveConfig() {
+        saveConfig(true);
+    }
+
+    private void saveConfig(boolean showMessage) {
         try {
             GeneralSettings gen = new GeneralSettings(
                     modelComboBox.getSelectedIndex(),
@@ -649,11 +657,15 @@ public class SettingsPanel extends JPanel {
             AppConfig config = new AppConfig(gen, new LinkedHashMap<>(stations));
 
             mapper.writeValue(currentConfigFile, config);
-            JOptionPane.showMessageDialog(this,
-                    "Configuration saved to " + currentConfigFile.getAbsolutePath());
+            if (showMessage) {
+                JOptionPane.showMessageDialog(this,
+                        "Configuration saved to " + currentConfigFile.getAbsolutePath());
+            }
         } catch (Exception e) {
             e.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Error saving file: " + e.getMessage());
+            if (showMessage) {
+                JOptionPane.showMessageDialog(this, "Error saving file: " + e.getMessage());
+            }
         }
     }
 

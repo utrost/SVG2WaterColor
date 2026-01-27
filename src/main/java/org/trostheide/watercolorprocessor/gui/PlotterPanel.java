@@ -178,6 +178,9 @@ public class PlotterPanel extends JPanel {
             return;
         }
 
+        // Auto-save config so driver sees latest changes
+        settingsPanel.saveConfigSilent();
+
         // Reload vis just in case
         visPanel.loadFromJson(new File(jsonPath));
         updateVisualSettings();

@@ -6,15 +6,15 @@
     "invertY" : true,
     "swapXY" : true,
     "visualMirror" : true,
-    "speedDown" : 25,
-    "speedUp" : 50,
+    "speedDown" : 50,
+    "speedUp" : 80,
     "penUp" : 90,
-    "penDown" : 15
+    "penDown" : 10
   },
   "stations" : {
     "default_station" : {
-      "x" : 10.0,
-      "y" : 10.0,
+      "x" : 15.0,
+      "y" : 15.0,
       "z_down" : 20,
       "behavior" : "dip_swirl"
     }
