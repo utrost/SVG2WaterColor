@@ -154,6 +154,9 @@ public class PlotterPanel extends JPanel {
         add(configPanel, BorderLayout.NORTH);
         add(splitPane, BorderLayout.CENTER); // Changed from add(scrollPane)
         add(controlPanel, BorderLayout.SOUTH);
+
+        // Force initial visual update to match settings (Startup Fix)
+        SwingUtilities.invokeLater(this::updateVisualSettings);
     }
 
     private void selectFile() {
@@ -172,9 +175,15 @@ public class PlotterPanel extends JPanel {
     }
 
     private void startProcess() {
-        String jsonPath = jsonField.getText();
+        String jsonPath = jsonField.getText().trim(); // Fix trailing spaces/typos
         if (jsonPath.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Please select a JSON file.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        File jsonFile = new File(jsonPath);
+        if (!jsonFile.exists()) {
+            JOptionPane.showMessageDialog(this, "File not found: " + jsonPath, "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
@@ -182,19 +191,24 @@ public class PlotterPanel extends JPanel {
         settingsPanel.saveConfigSilent();
 
         // Reload vis just in case
-        visPanel.loadFromJson(new File(jsonPath));
+        visPanel.loadFromJson(jsonFile);
         updateVisualSettings();
 
         List<String> cmd = new ArrayList<>();
-        cmd.add(pythonPathField.getText());
+        cmd.add(pythonPathField.getText().trim());
         cmd.add("driver/driver.py");
-        cmd.add(jsonPath);
+        cmd.add(jsonFile.getAbsolutePath());
+
         if (settingsPanel.isMockMode()) {
             cmd.add("--mock");
         }
+
+        // Fully Decoupled: Only add --invert-x if the user explicitly requested it via
+        // the checkbox.
         if (settingsPanel.isInvertX()) {
             cmd.add("--invert-x");
         }
+
         if (settingsPanel.isInvertY()) {
             cmd.add("--invert-y");
         }
@@ -219,6 +233,17 @@ public class PlotterPanel extends JPanel {
         cmd.add("--pen-down");
         cmd.add(String.valueOf(settingsPanel.getPenDownHeight()));
 
+        String alignment = settingsPanel.getCanvasAlignment();
+        if (alignment != null && !alignment.isEmpty()) {
+            cmd.add("--canvas-align");
+            cmd.add(alignment.toLowerCase().replace(" ", "-"));
+        }
+
+        // Pass 'origin-right' if visual mirror is enabled (implies top-right origin)
+        if (settingsPanel.isVisualMirror()) {
+            cmd.add("--origin-right");
+        }
+
         cmd.add("--report-position");
         cmd.add("--config");
         cmd.add(settingsPanel.getCurrentConfigFile().getAbsolutePath());
@@ -238,7 +263,6 @@ public class PlotterPanel extends JPanel {
             stopButton.setEnabled(true);
             inputButton.setEnabled(true);
 
-            // Disable config while running
             // Disable config while running
             settingsPanel.setSettingsEnabled(false);
             pythonPathField.setEnabled(false);
@@ -408,8 +432,21 @@ public class PlotterPanel extends JPanel {
     }
 
     private void updateVisualSettings() {
-        visPanel.setInvertX(settingsPanel.isVisualMirror());
+        appendToConsole("[DEBUG] Visual Settings Update: Align=" + settingsPanel.getCanvasAlignment());
+        visPanel.setMachineSize(settingsPanel.getMachineWidth(), settingsPanel.getMachineHeight());
+
+        // viewMirror REMOVED per Requirements.md - no more mirror tricks
+
+        // Data Inversion: Simulates physical inversion
+        // DECOUPLED: User must explicitly check "Invert X" if they need it (allows for
+        // custom motor wiring)
+        visPanel.setDataInvertX(settingsPanel.isInvertX());
+        visPanel.setDataInvertY(settingsPanel.isInvertY());
+
         visPanel.setSwapXY(settingsPanel.isSwapXY());
+        visPanel.setCanvasAlignment(settingsPanel.getCanvasAlignment());
+        visPanel.setOrientation(settingsPanel.getOrientation());
+        visPanel.setViewRotation(settingsPanel.getViewRotation());
     }
 
     private void appendToConsole(String text) {

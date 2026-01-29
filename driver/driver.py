@@ -50,14 +50,15 @@ def perform_refill(ad, station_id):
         
     print("--- Refill Complete ---")
 
-def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=False, invert_y=False, swap_xy=False):
+def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=False, invert_y=False, swap_xy=False, offset_x=0, offset_y=0, width=None, height=None):
     print(f"\n=== Starting Layer: {layer['id']} (Station: {layer['stationId']}) ===")
     input("Press Enter to start this layer (Ensure correct paint is ready)...")
     
     # Model 1 (V3 A4): X ~300, Y ~218
     # Model 2 (V3 A3): X ~430, Y ~297
-    maxX = 300.0 if model == 1 else 430.0
-    maxY = 215.0 if model == 1 else 297.0
+    # Allow override via width/height args if provided
+    maxX = width if width else (300.0 if model == 1 else 430.0)
+    maxY = height if height else (215.0 if model == 1 else 297.0)
     
     # If we are swapping XY, then the "Y" axis that we might invert is actually physically X?
     # Let's clarify the logic.
@@ -103,6 +104,10 @@ def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=
         
         if op == "MOVE":
             px, py = transform_point(cmd['x'], cmd['y'])
+            # Apply Canvas Alignment Offset
+            px += offset_x
+            py += offset_y
+            
             print(f"  [MOVE] To ({px:.2f}, {py:.2f}) [Orig: ({cmd['x']}, {cmd['y']})]")
             ad.moveto(px, py)
             if report_pos:
@@ -114,6 +119,9 @@ def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=
             points = cmd['points']
             for p in points:
                 px, py = transform_point(p['x'], p['y'])
+                # Apply Canvas Alignment Offset
+                px += offset_x
+                py += offset_y
                 
                 if verbose:
                     print(f"    -> Lineto ({px:.2f}, {py:.2f})")
@@ -199,6 +207,12 @@ def main():
     parser.add_argument('--interactive-server', action='store_true', help='Run in persistent server mode for manual control')
     parser.add_argument('--report-position', action='store_true', help='Report realtime position for GUI')
     parser.add_argument('--config', help='Path to custom configuration file')
+    
+    # Canvas Alignment Args
+    parser.add_argument('--canvas-align', choices=['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center'], 
+                        help='Auto-calculate offset to align content on canvas')
+    parser.add_argument('--origin-right', action='store_true', help='Machine Origin is Top-Right (0,0 is Right). Swaps Left/Right alignment targets.')
+    
     args = parser.parse_args()
 
     # Load Station Config Early
@@ -424,8 +438,98 @@ def main():
 
     try:
         print(f"DEBUG: ad.options.units = {ad.options.units} (Should be 2 for mm)")
+        
+        # Calculate Content Bounds & Offset if Alignment Requested
+        offset_x = 0
+        offset_y = 0
+        
+        if args.canvas_align:
+             # Gather all points to find bounds
+            min_x, min_y = float('inf'), float('inf')
+            max_x, max_y = float('-inf'), float('-inf')
+            
+            # Helper to run transform logic locally for bounds calc
+            # Note: We duplicate transform logic here or refactor. 
+            # Duplication is safer to avoid breaking execute_layer signature too much.
+            machine_w = 300.0 if args.model == 1 else 430.0
+            machine_h = 215.0 if args.model == 1 else 297.0
+            
+            def get_transformed_point(tx, ty, w, h):
+                if args.swap_xy:
+                    px, py = ty, tx
+                else:
+                    px, py = tx, ty
+                
+                if args.invert_x:
+                    px = w - px
+                if args.invert_y:
+                    py = h - py
+                return px, py
+
+            has_points = False
+            for layer in data['layers']:
+                for cmd in layer['commands']:
+                    if cmd['op'] == 'DRAW':
+                         for p in cmd['points']:
+                             px, py = p['x'], p['y'] # Original Logical
+                             has_points = True
+                             min_x = min(min_x, px)
+                             max_x = max(max_x, px)
+                             min_y = min(min_y, py)
+                             max_y = max(max_y, py)
+                             
+            if has_points:
+                # Transform Corners to find Physical Bounds
+                corners = [(min_x, min_y), (max_x, min_y), (min_x, max_y), (max_x, max_y)]
+                t_corners = [get_transformed_point(c[0], c[1], machine_w, machine_h) for c in corners]
+                
+                t_min_x = min(c[0] for c in t_corners)
+                t_max_x = max(c[0] for c in t_corners)
+                t_min_y = min(c[1] for c in t_corners)
+                t_max_y = max(c[1] for c in t_corners)
+                
+                print(f"INFO: Content Physical Bounds: X[{t_min_x:.2f}, {t_max_x:.2f}], Y[{t_min_y:.2f}, {t_max_y:.2f}]")
+                
+                # Identify Left/Right Edges based on Origin
+                target_left = 0
+                target_right = machine_w
+                
+                if args.origin_right:
+                    # Origin Right (X+ is Left)
+                    content_right_edge = t_min_x # Smallest X is closest to 0 (Right)
+                    content_left_edge = t_max_x  # Largest X is furthest (Left)
+                    target_left = machine_w
+                    target_right = 0
+                    print("INFO: Origin Right -> Content Right=MinX, Left=MaxX")
+                else:
+                    # Origin Left (Standard)
+                    content_left_edge = t_min_x
+                    content_right_edge = t_max_x
+                    # target_left = 0, target_right = machine_w (default)
+                    print("INFO: Origin Left -> Content Left=MinX, Right=MaxX")
+
+                if args.canvas_align == 'top-left':
+                    offset_x = target_left - content_left_edge
+                    offset_y = 0 - t_min_y
+                elif args.canvas_align == 'top-right':
+                    offset_x = target_right - content_right_edge
+                    offset_y = 0 - t_min_y
+                elif args.canvas_align == 'bottom-left':
+                    offset_x = target_left - content_left_edge
+                    offset_y = machine_h - t_max_y
+                elif args.canvas_align == 'bottom-right':
+                    offset_x = target_right - content_right_edge
+                    offset_y = machine_h - t_max_y
+                elif args.canvas_align == 'center':
+                    t_width = t_max_x - t_min_x
+                    t_height = t_max_y - t_min_y
+                    offset_x = (machine_w - t_width) / 2 - t_min_x
+                    offset_y = (machine_h - t_height) / 2 - t_min_y
+                    
+                print(f"INFO: Alignment Offset -> X={offset_x:.2f}, Y={offset_y:.2f}")
+
         for layer in data['layers']:
-            execute_layer(ad, layer, report_pos=args.report_position, verbose=args.verbose, model=args.model, invert_x=args.invert_x, invert_y=args.invert_y, swap_xy=args.swap_xy)
+            execute_layer(ad, layer, report_pos=args.report_position, verbose=args.verbose, model=args.model, invert_x=args.invert_x, invert_y=args.invert_y, swap_xy=args.swap_xy, offset_x=offset_x, offset_y=offset_y)
             
         # Return to home
         print("\nPlot Complete. Returning Home.")

@@ -27,7 +27,12 @@ public class MainFrame extends JFrame {
         JTabbedPane tabbedPane = new JTabbedPane();
         tabbedPane.addTab("1. Process SVG", processorPanel);
         tabbedPane.addTab("2. Plot (Driver)", plotterPanel);
-        tabbedPane.addTab("Settings", settingsPanel);
+
+        // Wrap Settings in ScrollPane for small screens
+        JScrollPane settingsScroll = new JScrollPane(settingsPanel);
+        settingsScroll.setBorder(null); // Clean look
+        settingsScroll.getVerticalScrollBar().setUnitIncrement(16); // Fast scrolling
+        tabbedPane.addTab("Settings", settingsScroll);
 
         add(tabbedPane, BorderLayout.CENTER);
     }

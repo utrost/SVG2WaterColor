@@ -3,13 +3,16 @@
     "modelIndex" : 1,
     "mock" : false,
     "invertX" : false,
-    "invertY" : true,
-    "swapXY" : true,
+    "invertY" : false,
+    "swapXY" : false,
     "visualMirror" : true,
     "speedDown" : 50,
     "speedUp" : 80,
     "penUp" : 90,
-    "penDown" : 10
+    "penDown" : 10,
+    "orientation" : "Portrait",
+    "canvasAlignment" : "Top Right",
+    "viewRotation" : 0
   },
   "stations" : {
     "default_station" : {

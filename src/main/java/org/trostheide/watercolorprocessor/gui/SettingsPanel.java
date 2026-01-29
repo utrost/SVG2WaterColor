@@ -21,9 +21,13 @@ public class SettingsPanel extends JPanel {
     private final JCheckBox invertXCheckBox;
     private final JCheckBox invertYCheckBox;
     private final JCheckBox swapXYCheckBox;
+    private JRadioButton portraitRadio; // New Field for Orientation
+    private JRadioButton landscapeRadio;
     private final JCheckBox visualMirrorCheckBox;
     private final JComboBox<String> modelComboBox;
     private final JCheckBox mockCheckBox;
+    private final JComboBox<String> canvasAlignmentCombo;
+    private final JComboBox<String> viewRotationCombo; // New Field
 
     // Station Editor Components
     private final JTable stationTable;
@@ -43,7 +47,8 @@ public class SettingsPanel extends JPanel {
 
     // DTOs for Full Config
     record GeneralSettings(int modelIndex, boolean mock, boolean invertX, boolean invertY, boolean swapXY,
-            boolean visualMirror, int speedDown, int speedUp, int penUp, int penDown) {
+            boolean visualMirror, int speedDown, int speedUp, int penUp, int penDown,
+            String orientation, String canvasAlignment, int viewRotation) {
     }
 
     record AppConfig(GeneralSettings general, Map<String, StationConfig> stations) {
@@ -111,7 +116,7 @@ public class SettingsPanel extends JPanel {
         flagsPanel.add(mockCheckBox);
 
         // Invert X
-        invertXCheckBox = new JCheckBox("Invert X (0,0 Top-Right)", false);
+        invertXCheckBox = new JCheckBox("Invert X");
         invertXCheckBox.addActionListener(e -> {
             if (manualSession != null)
                 manualSession.resetServer();
@@ -143,9 +148,54 @@ public class SettingsPanel extends JPanel {
 
         generalPanel.add(flagsPanel, gbcGen);
 
-        // Row 2: Speeds
+        // Row 1: Machine Orientation
         gbcGen.gridx = 0;
         gbcGen.gridy = 1;
+        gbcGen.weightx = 0.0;
+
+        JPanel orientationPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        orientationPanel.add(new JLabel("Orientation:"));
+        landscapeRadio = new JRadioButton("Landscape");
+        portraitRadio = new JRadioButton("Portrait");
+        ButtonGroup orientationGroup = new ButtonGroup();
+        orientationGroup.add(landscapeRadio);
+        orientationGroup.add(portraitRadio);
+        portraitRadio.setSelected(true); // Default (User Request)
+
+        landscapeRadio.addActionListener(e -> fireVisualChange());
+        portraitRadio.addActionListener(e -> fireVisualChange());
+
+        orientationPanel.add(landscapeRadio);
+        orientationPanel.add(portraitRadio);
+        generalPanel.add(orientationPanel, gbcGen);
+
+        // Row 1 (Right): Canvas Alignment
+        gbcGen.gridx = 1;
+        gbcGen.gridy = 1;
+        gbcGen.weightx = 1.0;
+
+        JPanel alignPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        alignPanel.add(new JLabel("Canvas Alignment:"));
+        canvasAlignmentCombo = new JComboBox<>(new String[] {
+                "Top Left", "Top Right", "Bottom Left", "Bottom Right", "Center"
+        });
+        canvasAlignmentCombo.setSelectedItem("Top Right"); // Default
+        canvasAlignmentCombo.setToolTipText("Align the drawing to a specific corner of the machine bed.");
+        canvasAlignmentCombo.addActionListener(e -> fireVisualChange());
+        alignPanel.add(canvasAlignmentCombo);
+
+        // Rotation
+        alignPanel.add(new JLabel("Rot:"));
+        viewRotationCombo = new JComboBox<>(new String[] { "0", "90", "180", "270" });
+        viewRotationCombo.setToolTipText("Rotate view (CCW)");
+        viewRotationCombo.addActionListener(e -> fireVisualChange());
+        alignPanel.add(viewRotationCombo);
+
+        generalPanel.add(alignPanel, gbcGen);
+
+        // Row 3: Speeds
+        gbcGen.gridx = 0;
+        gbcGen.gridy = 2;
         gbcGen.gridwidth = 2;
         gbcGen.weightx = 0.0;
 
@@ -456,6 +506,50 @@ public class SettingsPanel extends JPanel {
         return visualMirrorCheckBox.isSelected();
     }
 
+    public String getCanvasAlignment() {
+        return (String) canvasAlignmentCombo.getSelectedItem();
+    }
+
+    public String getOrientation() {
+        if (portraitRadio != null && portraitRadio.isSelected())
+            return "Portrait";
+        return "Landscape";
+    }
+
+    public int getViewRotation() {
+        try {
+            return Integer.parseInt((String) viewRotationCombo.getSelectedItem());
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    public double getMachineWidth() {
+        boolean isPortrait = portraitRadio != null && portraitRadio.isSelected();
+        double w;
+        if (getPlotterModelIndex() == 0)
+            w = 297; // A4 Width (Landscape)
+        else
+            w = 430; // A3 Width (Landscape)
+
+        return isPortrait ? getMachineHeightLimit() : w;
+    }
+
+    private double getMachineHeightLimit() {
+        if (getPlotterModelIndex() == 0)
+            return 210;
+        return 297;
+    }
+
+    public double getMachineHeight() {
+        boolean isPortrait = portraitRadio != null && portraitRadio.isSelected();
+
+        if (isPortrait) {
+            return (getPlotterModelIndex() == 0) ? 297 : 430;
+        }
+        return getMachineHeightLimit();
+    }
+
     public void setSettingsEnabled(boolean enabled) {
         modelComboBox.setEnabled(enabled);
         speedDownSpinner.setEnabled(enabled);
@@ -478,6 +572,7 @@ public class SettingsPanel extends JPanel {
         removeBtn.setEnabled(enabled);
         saveFileBtn.setEnabled(enabled);
         loadFileBtn.setEnabled(enabled);
+
     }
 
     public void setManualSession(ManualControlSession session) {
@@ -553,6 +648,21 @@ public class SettingsPanel extends JPanel {
                     speedUpSpinner.setValue(config.general.speedUp);
                     zUpSpinner.setValue(config.general.penUp);
                     zDownSpinner.setValue(config.general.penDown);
+
+                    // Restore Orientation & Alignment (with safe defaults)
+                    if ("Portrait".equals(config.general.orientation)) {
+                        portraitRadio.setSelected(true);
+                    } else {
+                        landscapeRadio.setSelected(true);
+                    }
+
+                    if (config.general.canvasAlignment != null) {
+                        canvasAlignmentCombo.setSelectedItem(config.general.canvasAlignment);
+                    }
+
+                    if (config.general.viewRotation > 0) {
+                        viewRotationCombo.setSelectedItem(String.valueOf(config.general.viewRotation));
+                    }
                 }
 
                 // Load Stations
@@ -652,7 +762,10 @@ public class SettingsPanel extends JPanel {
                     (Integer) speedDownSpinner.getValue(),
                     (Integer) speedUpSpinner.getValue(),
                     (Integer) zUpSpinner.getValue(),
-                    (Integer) zDownSpinner.getValue());
+                    (Integer) zDownSpinner.getValue(),
+                    getOrientation(),
+                    getCanvasAlignment(),
+                    getViewRotation());
 
             AppConfig config = new AppConfig(gen, new LinkedHashMap<>(stations));
 
