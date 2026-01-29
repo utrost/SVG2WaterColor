@@ -28,6 +28,8 @@ public class SettingsPanel extends JPanel {
     private final JCheckBox mockCheckBox;
     private final JComboBox<String> canvasAlignmentCombo;
     private final JComboBox<String> viewRotationCombo; // New Field
+    private final JSpinner paddingXSpinner; // New Field
+    private final JSpinner paddingYSpinner; // New Field
 
     // Station Editor Components
     private final JTable stationTable;
@@ -46,9 +48,23 @@ public class SettingsPanel extends JPanel {
     private final ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 
     // DTOs for Full Config
-    record GeneralSettings(int modelIndex, boolean mock, boolean invertX, boolean invertY, boolean swapXY,
-            boolean visualMirror, int speedDown, int speedUp, int penUp, int penDown,
-            String orientation, String canvasAlignment, int viewRotation) {
+    // DTOs for Full Config
+    static class GeneralSettings {
+        public int modelIndex;
+        public boolean mock;
+        public boolean invertX;
+        public boolean invertY;
+        public boolean swapXY;
+        public boolean visualMirror;
+        public int speedDown;
+        public int speedUp;
+        public int penUp;
+        public int penDown;
+        public String orientation;
+        public String canvasAlignment;
+        public int viewRotation;
+        public double paddingX;
+        public double paddingY;
     }
 
     record AppConfig(GeneralSettings general, Map<String, StationConfig> stations) {
@@ -190,6 +206,17 @@ public class SettingsPanel extends JPanel {
         viewRotationCombo.setToolTipText("Rotate view (CCW)");
         viewRotationCombo.addActionListener(e -> fireVisualChange());
         alignPanel.add(viewRotationCombo);
+
+        // Padding
+        alignPanel.add(new JLabel("Pad X (mm):"));
+        paddingXSpinner = new JSpinner(new SpinnerNumberModel(0.0, -100.0, 100.0, 1.0));
+        paddingXSpinner.addChangeListener(e -> fireVisualChange());
+        alignPanel.add(paddingXSpinner);
+
+        alignPanel.add(new JLabel("Pad Y (mm):"));
+        paddingYSpinner = new JSpinner(new SpinnerNumberModel(0.0, -100.0, 100.0, 1.0));
+        paddingYSpinner.addChangeListener(e -> fireVisualChange());
+        alignPanel.add(paddingYSpinner);
 
         generalPanel.add(alignPanel, gbcGen);
 
@@ -510,6 +537,14 @@ public class SettingsPanel extends JPanel {
         return (String) canvasAlignmentCombo.getSelectedItem();
     }
 
+    public double getPaddingX() {
+        return (Double) paddingXSpinner.getValue();
+    }
+
+    public double getPaddingY() {
+        return (Double) paddingYSpinner.getValue();
+    }
+
     public String getOrientation() {
         if (portraitRadio != null && portraitRadio.isSelected())
             return "Portrait";
@@ -669,6 +704,9 @@ public class SettingsPanel extends JPanel {
                     if (config.general.viewRotation > 0) {
                         viewRotationCombo.setSelectedItem(String.valueOf(config.general.viewRotation));
                     }
+
+                    paddingXSpinner.setValue(config.general.paddingX);
+                    paddingYSpinner.setValue(config.general.paddingY);
                 }
 
                 // Load Stations
@@ -759,20 +797,22 @@ public class SettingsPanel extends JPanel {
 
     private void saveConfig(boolean showMessage) {
         try {
-            GeneralSettings gen = new GeneralSettings(
-                    modelComboBox.getSelectedIndex(),
-                    mockCheckBox.isSelected(),
-                    invertXCheckBox.isSelected(),
-                    invertYCheckBox.isSelected(),
-                    swapXYCheckBox.isSelected(),
-                    visualMirrorCheckBox.isSelected(),
-                    (Integer) speedDownSpinner.getValue(),
-                    (Integer) speedUpSpinner.getValue(),
-                    (Integer) zUpSpinner.getValue(),
-                    (Integer) zDownSpinner.getValue(),
-                    getOrientation(),
-                    getCanvasAlignment(),
-                    getViewRotation());
+            GeneralSettings gen = new GeneralSettings();
+            gen.modelIndex = modelComboBox.getSelectedIndex();
+            gen.mock = mockCheckBox.isSelected();
+            gen.invertX = invertXCheckBox.isSelected();
+            gen.invertY = invertYCheckBox.isSelected();
+            gen.swapXY = swapXYCheckBox.isSelected();
+            gen.visualMirror = visualMirrorCheckBox.isSelected();
+            gen.speedDown = (Integer) speedDownSpinner.getValue();
+            gen.speedUp = (Integer) speedUpSpinner.getValue();
+            gen.penUp = (Integer) zUpSpinner.getValue();
+            gen.penDown = (Integer) zDownSpinner.getValue();
+            gen.orientation = getOrientation();
+            gen.canvasAlignment = getCanvasAlignment();
+            gen.viewRotation = getViewRotation();
+            gen.paddingX = getPaddingX();
+            gen.paddingY = getPaddingY();
 
             AppConfig config = new AppConfig(gen, new LinkedHashMap<>(stations));
 

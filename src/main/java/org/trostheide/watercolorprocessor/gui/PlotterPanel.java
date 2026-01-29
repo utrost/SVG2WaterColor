@@ -240,6 +240,12 @@ public class PlotterPanel extends JPanel {
             cmd.add(alignment.toLowerCase().replace(" ", "-"));
         }
 
+        // Padding
+        cmd.add("--padding-x");
+        cmd.add(String.valueOf(settingsPanel.getPaddingX()));
+        cmd.add("--padding-y");
+        cmd.add(String.valueOf(settingsPanel.getPaddingY()));
+
         // Always use origin-right since visualization assumes top-right origin (per
         // Requirements.md)
         cmd.add("--origin-right");
@@ -454,6 +460,7 @@ public class PlotterPanel extends JPanel {
         visPanel.setCanvasAlignment(settingsPanel.getCanvasAlignment());
         visPanel.setOrientation(settingsPanel.getOrientation());
         visPanel.setViewRotation(settingsPanel.getViewRotation());
+        visPanel.setPadding(settingsPanel.getPaddingX(), settingsPanel.getPaddingY());
 
         // Load station markers from in-memory config (immediate update)
         List<VisualizationPanel.Station> visualStations = new ArrayList<>();

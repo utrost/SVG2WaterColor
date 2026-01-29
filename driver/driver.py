@@ -226,6 +226,8 @@ def main():
                         help='Auto-calculate offset to align content on canvas')
     parser.add_argument('--origin-right', action='store_true', help='Machine Origin is Top-Right (0,0 is Right). Swaps Left/Right alignment targets.')
     parser.add_argument('--data-rotation', type=int, default=0, choices=[0, 90, 180, 270], help='Rotate drawing data (degrees CCW)')
+    parser.add_argument('--padding-x', type=float, default=0.0, help='Padding X (mm) for alignment')
+    parser.add_argument('--padding-y', type=float, default=0.0, help='Padding Y (mm) for alignment')
     
     args = parser.parse_args()
 
@@ -512,31 +514,36 @@ def main():
                     # Origin Right (X+ is Left)
                     content_right_edge = t_min_x # Smallest X is closest to 0 (Right)
                     content_left_edge = t_max_x  # Largest X is furthest (Left)
-                    target_left = machine_w
-                    target_right = 0
+                    target_left = machine_w - args.padding_x
+                    target_right = 0 + args.padding_x
                     print("INFO: Origin Right -> Content Right=MinX, Left=MaxX")
                 else:
                     # Origin Left (Standard)
                     content_left_edge = t_min_x
                     content_right_edge = t_max_x
-                    # target_left = 0, target_right = machine_w (default)
+                    target_left = 0 + args.padding_x
+                    target_right = machine_w - args.padding_x
                     print("INFO: Origin Left -> Content Left=MinX, Right=MaxX")
+
+                target_top = 0 + args.padding_y
+                target_bottom = machine_h - args.padding_y
 
                 if args.canvas_align == 'top-left':
                     offset_x = target_left - content_left_edge
-                    offset_y = 0 - t_min_y
+                    offset_y = target_top - t_min_y
                 elif args.canvas_align == 'top-right':
                     offset_x = target_right - content_right_edge
-                    offset_y = 0 - t_min_y
+                    offset_y = target_top - t_min_y
                 elif args.canvas_align == 'bottom-left':
                     offset_x = target_left - content_left_edge
-                    offset_y = machine_h - t_max_y
+                    offset_y = target_bottom - t_max_y
                 elif args.canvas_align == 'bottom-right':
                     offset_x = target_right - content_right_edge
-                    offset_y = machine_h - t_max_y
+                    offset_y = target_bottom - t_max_y
                 elif args.canvas_align == 'center':
                     t_width = t_max_x - t_min_x
                     t_height = t_max_y - t_min_y
+                    # Center ignores padding (or could use it as offset?)
                     offset_x = (machine_w - t_width) / 2 - t_min_x
                     offset_y = (machine_h - t_height) / 2 - t_min_y
                     

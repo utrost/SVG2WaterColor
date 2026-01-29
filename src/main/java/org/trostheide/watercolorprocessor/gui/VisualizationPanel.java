@@ -63,6 +63,8 @@ public class VisualizationPanel extends JPanel {
     private boolean swapXY = false;
     private boolean invertX = false;
     private boolean invertY = false;
+    private double paddingX = 0;
+    private double paddingY = 0;
 
     // Refill Stations (loaded from config)
     // Refill Stations (loaded from config)
@@ -119,6 +121,13 @@ public class VisualizationPanel extends JPanel {
 
     public void setCanvasAlignment(String alignment) {
         this.canvasAlignment = alignment;
+        recalculateTransform();
+        repaint();
+    }
+
+    public void setPadding(double x, double y) {
+        this.paddingX = x;
+        this.paddingY = y;
         recalculateTransform();
         repaint();
     }
@@ -339,30 +348,32 @@ public class VisualizationPanel extends JPanel {
                 // Content's physical "right" edge (tMinX after transforms) -> Machine origin
                 // (0)
                 // Content's physical "top" edge (tMinY) -> 0
-                alignOffsetX = -tMinX;
-                alignOffsetY = -tMinY;
+                alignOffsetX = -tMinX + paddingX;
+                alignOffsetY = -tMinY + paddingY;
                 break;
 
             case "Top Left":
-                alignOffsetX = machineWidth - tMaxX;
-                alignOffsetY = -tMinY;
+                alignOffsetX = machineWidth - tMaxX - paddingX;
+                alignOffsetY = -tMinY + paddingY;
                 break;
 
             case "Bottom Right":
-                alignOffsetX = -tMinX;
-                alignOffsetY = machineHeight - tMaxY;
+                alignOffsetX = -tMinX + paddingX;
+                alignOffsetY = machineHeight - tMaxY - paddingY;
                 break;
 
             case "Bottom Left":
-                alignOffsetX = machineWidth - tMaxX;
-                alignOffsetY = machineHeight - tMaxY;
+                alignOffsetX = machineWidth - tMaxX - paddingX;
+                alignOffsetY = machineHeight - tMaxY - paddingY;
                 break;
 
             case "Center":
-                double contentW = tMaxX - tMinX;
-                double contentH = tMaxY - tMinY;
-                alignOffsetX = (machineWidth - contentW) / 2.0 - tMinX;
-                alignOffsetY = (machineHeight - contentH) / 2.0 - tMinY;
+                double tWidth = tMaxX - tMinX;
+                double tHeight = tMaxY - tMinY;
+                // Center - no padding logic applied for now, or treat as offset?
+                // User requirement implies "border set-off". Center doesn't have borders.
+                alignOffsetX = (machineWidth - tWidth) / 2 - tMinX;
+                alignOffsetY = (machineHeight - tHeight) / 2 - tMinY;
                 break;
 
             default:
