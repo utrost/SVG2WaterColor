@@ -20,6 +20,12 @@
       "y" : 15.0,
       "z_down" : 20,
       "behavior" : "dip_swirl"
+    },
+    "foo" : {
+      "x" : 300.0,
+      "y" : 300.0,
+      "z_down" : 30,
+      "behavior" : "simple_dip"
     }
   }
 }

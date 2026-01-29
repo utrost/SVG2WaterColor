@@ -583,6 +583,10 @@ public class SettingsPanel extends JPanel {
         return currentConfigFile;
     }
 
+    public Map<String, StationConfig> getStations() {
+        return stations;
+    }
+
     // --- Internal Logic (Same as StationEditorPanel) ---
 
     private void loadSelection() {
@@ -613,6 +617,7 @@ public class SettingsPanel extends JPanel {
 
         stations.put(id, cfg);
         refreshTable();
+        fireVisualChange(); // Refresh station markers in visualization
     }
 
     private void removeStation() {
@@ -621,6 +626,7 @@ public class SettingsPanel extends JPanel {
             stations.remove(id);
             refreshTable();
             idField.setText("");
+            fireVisualChange(); // Refresh station markers in visualization
         }
     }
 
@@ -739,6 +745,7 @@ public class SettingsPanel extends JPanel {
         if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             currentConfigFile = fc.getSelectedFile();
             loadConfig();
+            fireVisualChange(); // Refresh station markers in visualization
         }
     }
 

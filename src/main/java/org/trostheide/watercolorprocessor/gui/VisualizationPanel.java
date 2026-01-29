@@ -9,7 +9,10 @@ import java.awt.geom.AffineTransform;
 import java.awt.geom.Path2D;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Visualization Panel - Digital Twin of the Physical Plotter
@@ -60,6 +63,19 @@ public class VisualizationPanel extends JPanel {
     private boolean swapXY = false;
     private boolean invertX = false;
     private boolean invertY = false;
+
+    // Refill Stations (loaded from config)
+    // Refill Stations (loaded from config)
+    public record Station(String name, double x, double y) {
+    }
+
+    private List<Station> stations = new ArrayList<>();
+
+    public void setStations(List<Station> newStations) {
+        this.stations.clear();
+        this.stations.addAll(newStations);
+        repaint();
+    }
 
     // ----- Setters -----
 
@@ -166,6 +182,35 @@ public class VisualizationPanel extends JPanel {
     public void updatePosition(double x, double y) {
         this.currentX = x;
         this.currentY = y;
+        repaint();
+    }
+
+    /**
+     * Load refill station positions from a config file.
+     * Stations are displayed as markers on the canvas.
+     */
+    public void loadStationsFromConfig(File configFile) {
+        stations.clear();
+        if (configFile == null || !configFile.exists()) {
+            return;
+        }
+        try {
+            JsonNode root = mapper.readTree(configFile);
+            JsonNode stationsNode = root.get("stations");
+            if (stationsNode != null && stationsNode.isObject()) {
+                var fields = stationsNode.fields();
+                while (fields.hasNext()) {
+                    var entry = fields.next();
+                    String name = entry.getKey();
+                    JsonNode station = entry.getValue();
+                    double x = station.has("x") ? station.get("x").asDouble() : 0;
+                    double y = station.has("y") ? station.get("y").asDouble() : 0;
+                    stations.add(new Station(name, x, y));
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         repaint();
     }
 
@@ -468,6 +513,21 @@ public class VisualizationPanel extends JPanel {
         g2.setColor(Color.GREEN);
         g2.draw(new java.awt.geom.Line2D.Double(originScreen[0], originScreen[1], yAxisEnd[0], yAxisEnd[1]));
         g2.drawString("Y", (float) (yAxisEnd[0] + 5 / scale), (float) (yAxisEnd[1] + 5 / scale));
+
+        // --- Draw Refill Stations ---
+        for (Station station : stations) {
+            // Station coords are in raw input space, transform to screen
+            double[] sScreen = physicalToScreen(station.x(), station.y());
+            g2.setColor(new Color(0, 128, 255)); // Blue marker
+            double stationR = 4 / scale;
+            g2.fill(new java.awt.geom.Ellipse2D.Double(sScreen[0] - stationR, sScreen[1] - stationR,
+                    stationR * 2, stationR * 2));
+            // Draw station label
+            g2.setColor(Color.DARK_GRAY);
+            g2.setFont(g2.getFont().deriveFont((float) (9 / scale)));
+            g2.drawString(station.name(), (float) (sScreen[0] + stationR + 2 / scale),
+                    (float) (sScreen[1] + 4 / scale));
+        }
 
         // --- Draw Paths ---
         g2.setColor(new Color(50, 50, 150));

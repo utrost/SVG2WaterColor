@@ -7,6 +7,7 @@ import java.awt.*;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class PlotterPanel extends JPanel {
 
@@ -453,6 +454,17 @@ public class PlotterPanel extends JPanel {
         visPanel.setCanvasAlignment(settingsPanel.getCanvasAlignment());
         visPanel.setOrientation(settingsPanel.getOrientation());
         visPanel.setViewRotation(settingsPanel.getViewRotation());
+
+        // Load station markers from in-memory config (immediate update)
+        List<VisualizationPanel.Station> visualStations = new ArrayList<>();
+        Map<String, SettingsPanel.StationConfig> stations = settingsPanel.getStations();
+        if (stations != null) {
+            for (Map.Entry<String, SettingsPanel.StationConfig> entry : stations.entrySet()) {
+                SettingsPanel.StationConfig cfg = entry.getValue();
+                visualStations.add(new VisualizationPanel.Station(entry.getKey(), cfg.x(), cfg.y()));
+            }
+        }
+        visPanel.setStations(visualStations);
     }
 
     private void appendToConsole(String text) {
