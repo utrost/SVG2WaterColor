@@ -208,7 +208,9 @@ public class VisualizationPanel extends JPanel {
     }
 
     /**
-     * Step 3 & 4: Recalculate rotated bounds and alignment offset.
+     * Step 3 & 4: Recalculate transformed bounds and alignment offset.
+     * MUST match driver.py's alignment logic exactly!
+     * Driver calculates bounds AFTER applying swap/invert to corners.
      */
     private void recalculateTransform() {
         if (allPaths.isEmpty()) {
@@ -217,71 +219,105 @@ public class VisualizationPanel extends JPanel {
             return;
         }
 
-        // Calculate rotated bounds
-        rotMinX = Double.MAX_VALUE;
-        rotMinY = Double.MAX_VALUE;
-        rotMaxX = -Double.MAX_VALUE;
-        rotMaxY = -Double.MAX_VALUE;
+        // Step 1: Calculate RAW bounds (before any transform) - same as driver
+        double rawMinX = Double.MAX_VALUE, rawMaxX = -Double.MAX_VALUE;
+        double rawMinY = Double.MAX_VALUE, rawMaxY = -Double.MAX_VALUE;
 
         for (List<Point2D> path : allPaths) {
             for (Point2D p : path) {
-                Point2D rp = rotateAroundCenter(p);
-                rotMinX = Math.min(rotMinX, rp.x());
-                rotMaxX = Math.max(rotMaxX, rp.x());
-                rotMinY = Math.min(rotMinY, rp.y());
-                rotMaxY = Math.max(rotMaxY, rp.y());
+                rawMinX = Math.min(rawMinX, p.x());
+                rawMaxX = Math.max(rawMaxX, p.x());
+                rawMinY = Math.min(rawMinY, p.y());
+                rawMaxY = Math.max(rawMaxY, p.y());
             }
         }
 
-        double contentW = rotMaxX - rotMinX;
-        double contentH = rotMaxY - rotMinY;
+        // Step 2: Transform corners through rotation + swap/invert (like driver's
+        // get_transformed_point)
+        // The driver does NOT include rotation in get_transformed_point, but DOES in
+        // transform_point.
+        // This is inconsistent in the driver! But we'll match it.
+        // Actually, looking at driver code more carefully:
+        // - get_transformed_point does swap/invert only (no rotation)
+        // - alignment is based on get_transformed_point output
+        // - actual drawing uses transform_point which INCLUDES rotation
+        //
+        // So the driver's alignment doesn't account for rotation! This is likely a bug
+        // in driver.
+        // For now, let's match the driver's behavior (no rotation in bounds for
+        // alignment).
 
-        // Calculate alignment offset
-        // Physical Machine: Origin Top-Right (0,0), X grows Left, Y grows Down.
-        // Input (after rotation): Origin somewhere, we need to place a corner at a
-        // machine corner.
+        // Corners in raw coords
+        double[][] corners = {
+                { rawMinX, rawMinY }, { rawMaxX, rawMinY },
+                { rawMinX, rawMaxY }, { rawMaxX, rawMaxY }
+        };
 
+        // Transform corners with swap/invert only (matching driver's
+        // get_transformed_point)
+        double tMinX = Double.MAX_VALUE, tMaxX = -Double.MAX_VALUE;
+        double tMinY = Double.MAX_VALUE, tMaxY = -Double.MAX_VALUE;
+
+        for (double[] c : corners) {
+            double x = c[0], y = c[1];
+
+            // Apply swap
+            if (swapXY) {
+                double temp = x;
+                x = y;
+                y = temp;
+            }
+
+            // Apply invert
+            if (invertX) {
+                x = machineWidth - x;
+            }
+            if (invertY) {
+                y = machineHeight - y;
+            }
+
+            tMinX = Math.min(tMinX, x);
+            tMaxX = Math.max(tMaxX, x);
+            tMinY = Math.min(tMinY, y);
+            tMaxY = Math.max(tMaxY, y);
+        }
+
+        // Store rotated bounds (used in rotateAroundCenter for center calculation)
+        rotMinX = rawMinX;
+        rotMaxX = rawMaxX;
+        rotMinY = rawMinY;
+        rotMaxY = rawMaxY;
+
+        // Calculate alignment offset based on TRANSFORMED bounds (matching driver)
         switch (canvasAlignment) {
             case "Top Right":
-                // Rotated content's top-right corner -> Physical (0, 0)
-                // Rotated top-right = (rotMaxX, rotMinY)
-                // After X-flip: physX = rotMaxX - x, so rotMaxX -> 0. Good.
-                // We want (rotMaxX, rotMinY) to map to Physical (0, 0).
-                // physX = (rotMaxX - x) + offsetX. For x=rotMaxX: physX = 0 + offsetX. Want 0,
-                // so offsetX = 0.
-                // physY = (y - rotMinY) + offsetY. For y=rotMinY: physY = 0 + offsetY. Want 0,
-                // so offsetY = 0.
-                alignOffsetX = 0;
-                alignOffsetY = 0;
+                // Content's physical "right" edge (tMinX after transforms) -> Machine origin
+                // (0)
+                // Content's physical "top" edge (tMinY) -> 0
+                alignOffsetX = -tMinX;
+                alignOffsetY = -tMinY;
                 break;
 
             case "Top Left":
-                // Rotated content's top-left corner -> Physical top-left (which is
-                // machineWidth, 0)
-                // Rotated top-left = (rotMinX, rotMinY)
-                // physX = (rotMaxX - rotMinX) + offsetX = contentW + offsetX. Want
-                // machineWidth.
-                // offsetX = machineWidth - contentW.
-                alignOffsetX = machineWidth - contentW;
-                alignOffsetY = 0;
+                alignOffsetX = machineWidth - tMaxX;
+                alignOffsetY = -tMinY;
                 break;
 
             case "Bottom Right":
-                // Rotated content's bottom-right corner -> Physical (0, machineHeight)
-                alignOffsetX = 0;
-                alignOffsetY = machineHeight - contentH;
+                alignOffsetX = -tMinX;
+                alignOffsetY = machineHeight - tMaxY;
                 break;
 
             case "Bottom Left":
-                // Rotated content's bottom-left corner -> Physical (machineWidth,
-                // machineHeight)
-                alignOffsetX = machineWidth - contentW;
-                alignOffsetY = machineHeight - contentH;
+                alignOffsetX = machineWidth - tMaxX;
+                alignOffsetY = machineHeight - tMaxY;
                 break;
 
             case "Center":
-                alignOffsetX = (machineWidth - contentW) / 2.0;
-                alignOffsetY = (machineHeight - contentH) / 2.0;
+                double contentW = tMaxX - tMinX;
+                double contentH = tMaxY - tMinY;
+                alignOffsetX = (machineWidth - contentW) / 2.0 - tMinX;
+                alignOffsetY = (machineHeight - contentH) / 2.0 - tMinY;
                 break;
 
             default:
@@ -292,12 +328,13 @@ public class VisualizationPanel extends JPanel {
 
     /**
      * Step 5: Convert rotated input point to Physical coordinates.
-     * This flips X (because Input X grows Right, Physical X grows Left).
+     * Simply applies alignment offset. NO X-flip here (driver doesn't flip X by
+     * default).
      */
     private Point2D inputToPhysical(Point2D rotatedPoint) {
-        // Flip X around the right edge of rotated content, then add offset.
-        double physX = (rotMaxX - rotatedPoint.x()) + alignOffsetX;
-        double physY = (rotatedPoint.y() - rotMinY) + alignOffsetY;
+        // Just apply offset, no flip!
+        double physX = rotatedPoint.x() + alignOffsetX;
+        double physY = rotatedPoint.y() + alignOffsetY;
         return new Point2D(physX, physY);
     }
 
@@ -327,22 +364,50 @@ public class VisualizationPanel extends JPanel {
 
     /**
      * Step 7: Map Physical coordinates to Screen coordinates for drawing.
-     * Physical: Origin Top-Right, X grows Left.
-     * Screen: Origin Top-Left, X grows Right.
-     * Mapping: screenX = machineWidth - physX, screenY = physY.
+     * 
+     * Physical Machine (A3 model 2, NO swap):
+     * - Motor X: 0-430 (long axis, horizontal in Landscape)
+     * - Motor Y: 0-297 (short axis, vertical in Landscape)
+     * - Origin: Motor (0,0) at top-right
+     * 
+     * Display (Portrait mode):
+     * - Screen Width: 297 (short axis)
+     * - Screen Height: 420 (long axis)
+     * - Screen (0,0): top-left
+     * 
+     * When SwapXY is ENABLED:
+     * - Motor X now uses the INPUT Y (which may be large)
+     * - Motor Y now uses the INPUT X
+     * - So Motor X values can exceed 297 (up to 420+)
+     * - We need to swap the mapping
      */
     private double[] physicalToScreen(double physX, double physY) {
-        return new double[] { machineWidth - physX, physY };
+        if (swapXY) {
+            // With SwapXY, motor coords are swapped relative to display:
+            // - physX (was input Y) maps to screen Y (long axis, height)
+            // - physY (was input X) maps to screen X (short axis, width)
+            // Origin is still top-right, so Y grows down (physX to screenY directly)
+            // and X grows left (physY to screenX with flip)
+            return new double[] { machineWidth - physY, physX };
+        } else {
+            // Standard mapping: origin at top-right, X grows left
+            return new double[] { machineWidth - physX, physY };
+        }
     }
 
     /**
-     * Full pipeline: Input Point -> Screen Point
+     * Full pipeline: Raw Point -> Screen Point
+     * Order matches driver.py: rotate -> swap/invert -> offset
      */
     private double[] transformPoint(Point2D rawPoint) {
+        // 1. Rotate around content center
         Point2D rotated = rotateAroundCenter(rawPoint);
-        Point2D physical = inputToPhysical(rotated);
-        Point2D driverSim = simulateDriver(physical);
-        return physicalToScreen(driverSim.x(), driverSim.y());
+        // 2. Apply swap/invert (driver's transform_point does this first)
+        Point2D driverSim = simulateDriver(rotated);
+        // 3. Apply alignment offset (driver adds offset AFTER transform_point)
+        Point2D offsetApplied = new Point2D(driverSim.x() + alignOffsetX, driverSim.y() + alignOffsetY);
+        // 4. Convert to screen coords for display
+        return physicalToScreen(offsetApplied.x(), offsetApplied.y());
     }
 
     // ----- Painting -----

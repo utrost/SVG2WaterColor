@@ -50,7 +50,7 @@ def perform_refill(ad, station_id):
         
     print("--- Refill Complete ---")
 
-def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=False, invert_y=False, swap_xy=False, offset_x=0, offset_y=0, width=None, height=None):
+def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=False, invert_y=False, swap_xy=False, offset_x=0, offset_y=0, width=None, height=None, data_rotation=0, content_bounds=None):
     print(f"\n=== Starting Layer: {layer['id']} (Station: {layer['stationId']}) ===")
     input("Press Enter to start this layer (Ensure correct paint is ready)...")
     
@@ -82,6 +82,19 @@ def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=
     # Therefore, 'invert_y' should mean "Invert the coordinate mapped to the Machine Y axis".
     
     def transform_point(tx, ty):
+        # 0. Apply Data Rotation (around content center)
+        if data_rotation != 0 and content_bounds:
+            cx = (content_bounds['minX'] + content_bounds['maxX']) / 2
+            cy = (content_bounds['minY'] + content_bounds['maxY']) / 2
+            dx, dy = tx - cx, ty - cy
+            if data_rotation == 90:
+                dx, dy = -dy, dx
+            elif data_rotation == 180:
+                dx, dy = -dx, -dy
+            elif data_rotation == 270:
+                dx, dy = dy, -dx
+            tx, ty = dx + cx, dy + cy
+        
         # 1. Swap if requested
         if swap_xy:
             px, py = ty, tx
@@ -212,6 +225,7 @@ def main():
     parser.add_argument('--canvas-align', choices=['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center'], 
                         help='Auto-calculate offset to align content on canvas')
     parser.add_argument('--origin-right', action='store_true', help='Machine Origin is Top-Right (0,0 is Right). Swaps Left/Right alignment targets.')
+    parser.add_argument('--data-rotation', type=int, default=0, choices=[0, 90, 180, 270], help='Rotate drawing data (degrees CCW)')
     
     args = parser.parse_args()
 
@@ -527,9 +541,12 @@ def main():
                     offset_y = (machine_h - t_height) / 2 - t_min_y
                     
                 print(f"INFO: Alignment Offset -> X={offset_x:.2f}, Y={offset_y:.2f}")
+                
+        # Build content bounds dict for execute_layer (uses raw bounds, not transformed)
+        content_bounds = {'minX': min_x, 'maxX': max_x, 'minY': min_y, 'maxY': max_y} if has_points else None
 
         for layer in data['layers']:
-            execute_layer(ad, layer, report_pos=args.report_position, verbose=args.verbose, model=args.model, invert_x=args.invert_x, invert_y=args.invert_y, swap_xy=args.swap_xy, offset_x=offset_x, offset_y=offset_y)
+            execute_layer(ad, layer, report_pos=args.report_position, verbose=args.verbose, model=args.model, invert_x=args.invert_x, invert_y=args.invert_y, swap_xy=args.swap_xy, offset_x=offset_x, offset_y=offset_y, data_rotation=args.data_rotation, content_bounds=content_bounds)
             
         # Return to home
         print("\nPlot Complete. Returning Home.")

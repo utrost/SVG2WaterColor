@@ -239,9 +239,15 @@ public class PlotterPanel extends JPanel {
             cmd.add(alignment.toLowerCase().replace(" ", "-"));
         }
 
-        // Pass 'origin-right' if visual mirror is enabled (implies top-right origin)
-        if (settingsPanel.isVisualMirror()) {
-            cmd.add("--origin-right");
+        // Always use origin-right since visualization assumes top-right origin (per
+        // Requirements.md)
+        cmd.add("--origin-right");
+
+        // Pass data rotation setting to driver
+        int rotation = settingsPanel.getViewRotation();
+        if (rotation != 0) {
+            cmd.add("--data-rotation");
+            cmd.add(String.valueOf(rotation));
         }
 
         cmd.add("--report-position");
