@@ -61,7 +61,7 @@ public class WatercolorProcessor {
 
             ProcessorService service = new ProcessorService();
             service.process(inputFile, outputFile, maxDrawDistance, defaultStationId, curveApproximation, fitToFormat,
-                    padding);
+                    padding, false);
 
             logger.info("Processing complete.");
 

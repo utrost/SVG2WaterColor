@@ -14,6 +14,7 @@ public class ProcessorPanel extends JPanel {
     private final JTextField stationField;
     private final JComboBox<String> formatCombo;
     private final JSpinner paddingSpinner;
+    private final JCheckBox mirrorCheckBox;
     private final JTextArea statusArea;
 
     public ProcessorPanel(JTextArea statusArea) {
@@ -128,9 +129,22 @@ public class ProcessorPanel extends JPanel {
         paddingSpinner = new JSpinner(new SpinnerNumberModel(10.0, 0.0, 100.0, 1.0));
         add(paddingSpinner, gbc);
 
-        // Row 7: Process Button
+        // Row 7: Mirror Drawing
         gbc.gridx = 0;
         gbc.gridy = 7;
+        gbc.weightx = 0.1;
+        gbc.gridwidth = 1;
+        add(new JLabel("Mirror:"), gbc);
+
+        gbc.gridx = 1;
+        gbc.weightx = 0.9;
+        gbc.gridwidth = 2;
+        mirrorCheckBox = new JCheckBox("Mirror Drawing Horizontally (Flip X)");
+        add(mirrorCheckBox, gbc);
+
+        // Row 8: Process Button
+        gbc.gridx = 0;
+        gbc.gridy = 8;
         gbc.weightx = 1.0;
         gbc.gridwidth = 3;
         gbc.fill = GridBagConstraints.NONE;
@@ -141,9 +155,9 @@ public class ProcessorPanel extends JPanel {
         processBtn.addActionListener(e -> startProcessing());
         add(processBtn, gbc);
 
-        // Row 8: Log Area
+        // Row 9: Log Area
         gbc.gridx = 0;
-        gbc.gridy = 8;
+        gbc.gridy = 9;
         gbc.weightx = 1.0;
         gbc.weighty = 1.0; // Fill remaining vertical space
         gbc.gridwidth = 3;
@@ -207,6 +221,7 @@ public class ProcessorPanel extends JPanel {
                 stationField.getText(),
                 selectedFormat,
                 (Double) paddingSpinner.getValue(),
+                mirrorCheckBox.isSelected(),
                 statusArea);
         worker.execute();
     }

@@ -49,7 +49,7 @@ public class ProcessorService {
     }
 
     public void process(File inputFile, File outputFile, double maxDrawDistance, String defaultStationId,
-            double curveApproximation, String fitToFormatStr, double padding) {
+            double curveApproximation, String fitToFormatStr, double padding, boolean mirror) {
         logger.info("Starting processing for: {}", inputFile.getName());
 
         PaperFormat fitToFormat = PaperFormat.fromString(fitToFormatStr);
@@ -66,14 +66,32 @@ public class ProcessorService {
             // 2. Identify Layers
             List<LayerProcessingContext> layersToProcess = identifyLayers(doc, defaultStationId);
 
-            // 3. Pre-scan for bounds (if auto-scaling is active)
+            // 3. Pre-scan for bounds (if auto-scaling or mirroring is active)
             AffineTransform globalTx = new AffineTransform();
+            Bounds preScannedBounds = null;
 
-            if (fitToFormat != null) {
-                Bounds preScannedBounds = calculateGlobalBounds(layersToProcess);
-                if (preScannedBounds != null) {
-                    globalTx = calculateFitToPageTransform(preScannedBounds, fitToFormat, padding);
+            if (fitToFormat != null || mirror) {
+                preScannedBounds = calculateGlobalBounds(layersToProcess);
+            }
+
+            if (fitToFormat != null && preScannedBounds != null) {
+                globalTx = calculateFitToPageTransform(preScannedBounds, fitToFormat, padding);
+            }
+
+            // Mirror Logic
+            if (mirror) {
+                double pivotX = 0;
+                if (fitToFormat != null) {
+                    // Mirror around the center of the PAGE
+                    pivotX = fitToFormat.width() / 2.0;
+                } else if (preScannedBounds != null) {
+                    // Mirror around the center of the DRAWING (keep position relative to center)
+                    pivotX = (preScannedBounds.minX() + preScannedBounds.maxX()) / 2.0;
                 }
+
+                // Flip X around pivotX: x' = pivot + (pivot - x) = 2*pivot - x
+                AffineTransform mirrorTx = new AffineTransform(-1, 0, 0, 1, 2 * pivotX, 0);
+                globalTx.preConcatenate(mirrorTx);
             }
 
             // 4. Process Each Layer

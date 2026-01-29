@@ -17,9 +17,10 @@ public class ProcessingWorker extends SwingWorker<String, String> {
 
     private final String fitToFormat;
     private final double padding;
+    private final boolean mirror;
 
     public ProcessingWorker(File inputFile, File outputFile, double maxDistance, double curveStep, String stationId,
-            String fitToFormat, double padding, JTextArea statusArea) {
+            String fitToFormat, double padding, boolean mirror, JTextArea statusArea) {
         this.inputFile = inputFile;
         this.outputFile = outputFile;
         this.maxDistance = maxDistance;
@@ -27,6 +28,7 @@ public class ProcessingWorker extends SwingWorker<String, String> {
         this.stationId = stationId;
         this.fitToFormat = fitToFormat;
         this.padding = padding;
+        this.mirror = mirror;
         this.statusArea = statusArea;
     }
 
@@ -42,7 +44,7 @@ public class ProcessingWorker extends SwingWorker<String, String> {
             // Since the Service logs to SLF4J, we won't capture internal logs easily
             // without a custom appender.
             // For now, we just run it and catch exceptions.
-            service.process(inputFile, outputFile, maxDistance, stationId, curveStep, fitToFormat, padding);
+            service.process(inputFile, outputFile, maxDistance, stationId, curveStep, fitToFormat, padding, mirror);
             return "Success! Output written to: " + outputFile.getName();
         } catch (Exception e) {
             e.printStackTrace();
