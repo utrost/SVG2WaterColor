@@ -1,5 +1,8 @@
 package org.trostheide.watercolorprocessor.dto.command;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 /**
  * Represents a non-drawing travel move (Pen Up).
  * @param id Sequential command ID.
@@ -11,7 +14,8 @@ public final class MoveCommand extends Command {
     public final double x;
     public final double y;
 
-    public MoveCommand(int id, double x, double y) {
+    @JsonCreator
+    public MoveCommand(@JsonProperty("id") int id, @JsonProperty("x") double x, @JsonProperty("y") double y) {
         this.id = id;
         this.x = x;
         this.y = y;

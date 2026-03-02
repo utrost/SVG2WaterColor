@@ -66,8 +66,9 @@ public class ProcessingWorker extends SwingWorker<String, String> {
             statusArea.append("Done: " + result + "\n");
             JOptionPane.showMessageDialog(null, result, "Processing Complete", JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception e) {
-            statusArea.append("Error: " + e.getCause().getMessage() + "\n");
-            JOptionPane.showMessageDialog(null, "Error: " + e.getCause().getMessage(), "Processing Failed",
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            statusArea.append("Error: " + cause.getMessage() + "\n");
+            JOptionPane.showMessageDialog(null, "Error: " + cause.getMessage(), "Processing Failed",
                     JOptionPane.ERROR_MESSAGE);
         }
     }

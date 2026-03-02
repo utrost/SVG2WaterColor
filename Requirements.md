@@ -31,7 +31,7 @@ The GUI "Live View" must act as a **Digital Twin** of the physical machine.
 ## 4. Transformation Logic (Processing Pipeline)
 To map *Input Data* (Step 2) to *Hardware* (Step 1), the system must support:
 
-*   **Data Rotation**: The ability to rotate the *Drawing Content* (e.g., by 90°) to fit a Landscape image onto the Portrait machine bed without rotating the interface itself.
+*   **Data Rotation**: The ability to visually rotate the *Drawing Content's Bounding Box* (e.g., by 90°) to accurately preview how a Landscape image maps onto the Portrait machine bed without altering the orientation of the raw SVG paths themselves.
 *   **Corner Alignment**: The ability to snap the drawing content (after rotation) to any of the four corners of the physical bed (e.g., "Align Top Right" = Snap Drawing Corner to Machine Origin).
 *   **Hardware Mapping**:
     *   **Swap XY**: Option to treat Logic X as Physical Y (and vice-versa) for rotated mounting.

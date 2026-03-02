@@ -39,7 +39,7 @@ public class ProcessorService {
     private static final Logger logger = LoggerFactory.getLogger(ProcessorService.class);
     private final ObjectMapper objectMapper;
 
-    // Global state for the processing run
+    // Global state for the processing run — reset at the start of each process() call
     private int commandCounter = 1;
 
     public ProcessorService() {
@@ -51,6 +51,7 @@ public class ProcessorService {
     public void process(File inputFile, File outputFile, double maxDrawDistance, String defaultStationId,
             double curveApproximation, String fitToFormatStr, double padding, boolean mirror) {
         logger.info("Starting processing for: {}", inputFile.getName());
+        this.commandCounter = 1; // Reset for each processing run
 
         PaperFormat fitToFormat = PaperFormat.fromString(fitToFormatStr);
         if (fitToFormatStr != null && fitToFormat == null) {
@@ -436,28 +437,31 @@ public class ProcessorService {
         return v.isEmpty() ? 0.0 : Double.parseDouble(v);
     }
 
-    private double distance(Point p1, Point p2) {
+    // Package-private for testability
+    double distance(Point p1, Point p2) {
         return Math.sqrt(Math.pow(p2.x() - p1.x(), 2) + Math.pow(p2.y() - p1.y(), 2));
     }
 
-    private Point interpolate(Point start, Point end, double distToTravel, double totalDist) {
+    // Package-private for testability
+    Point interpolate(Point start, Point end, double distToTravel, double totalDist) {
         if (totalDist == 0)
             return start;
         double ratio = distToTravel / totalDist;
         return new Point(start.x() + (end.x() - start.x()) * ratio, start.y() + (end.y() - start.y()) * ratio);
     }
 
-    private static class BoundsBuilder {
+    // Package-private for testability
+    static class BoundsBuilder {
         double minX = Double.MAX_VALUE;
         double minY = Double.MAX_VALUE;
-        double maxX = Double.MIN_VALUE;
-        double maxY = Double.MIN_VALUE;
+        double maxX = -Double.MAX_VALUE;
+        double maxY = -Double.MAX_VALUE;
 
         void reset() {
             minX = Double.MAX_VALUE;
             minY = Double.MAX_VALUE;
-            maxX = Double.MIN_VALUE;
-            maxY = Double.MIN_VALUE;
+            maxX = -Double.MAX_VALUE;
+            maxY = -Double.MAX_VALUE;
         }
 
         void add(double x, double y) {
@@ -506,14 +510,15 @@ public class ProcessorService {
                     builder.add(r2d.getMinX(), r2d.getMinY());
                     builder.add(r2d.getMaxX(), r2d.getMaxY());
                 } catch (Exception e) {
-                    // ignore
+                    logger.warn("Skipping element during bounds calculation: {}", e.getMessage());
                 }
             }
         }
         return builder.build();
     }
 
-    private AffineTransform calculateFitToPageTransform(Bounds contentBounds, PaperFormat format, double padding) {
+    // Package-private for testability
+    AffineTransform calculateFitToPageTransform(Bounds contentBounds, PaperFormat format, double padding) {
         if (contentBounds.minX() == Double.MAX_VALUE)
             return new AffineTransform();
 
@@ -550,22 +555,46 @@ public class ProcessorService {
     }
 
     private Shape applyElementTransform(Node node, Shape shape) {
-        if (node.getNodeType() == Node.ELEMENT_NODE) {
-            Element ie = (Element) node;
-            if (ie.hasAttribute("transform")) {
+        // Accumulate transforms from the element up through all parent <g> elements
+        AffineTransform accumulated = getAccumulatedTransform(node);
+        if (!accumulated.isIdentity()) {
+            return accumulated.createTransformedShape(shape);
+        }
+        return shape;
+    }
+
+    /**
+     * Walk from the given node up to the document root, collecting all
+     * transform attributes from parent elements. Returns a single
+     * AffineTransform that is the concatenation of all ancestor transforms
+     * (outermost first) followed by the element's own transform.
+     */
+    private AffineTransform getAccumulatedTransform(Node node) {
+        // Collect transforms bottom-up, then apply top-down
+        java.util.Deque<AffineTransform> stack = new java.util.ArrayDeque<>();
+
+        Node current = node;
+        while (current != null && current.getNodeType() == Node.ELEMENT_NODE) {
+            Element el = (Element) current;
+            if (el.hasAttribute("transform")) {
                 try {
-                    String tVal = ie.getAttribute("transform");
                     TransformListParser tParser = new TransformListParser();
                     AWTTransformProducer tProducer = new AWTTransformProducer();
                     tParser.setTransformListHandler(tProducer);
-                    tParser.parse(tVal);
-                    AffineTransform tx = tProducer.getAffineTransform();
-                    return tx.createTransformedShape(shape);
+                    tParser.parse(el.getAttribute("transform"));
+                    stack.push(tProducer.getAffineTransform());
                 } catch (Exception ex) {
-                    // warn
+                    logger.warn("Failed to parse transform '{}': {}", el.getAttribute("transform"), ex.getMessage());
                 }
             }
+            current = current.getParentNode();
         }
-        return shape;
+
+        AffineTransform accumulated = new AffineTransform();
+        // Pop applies outermost (root) transform first, then inner transforms
+        while (!stack.isEmpty()) {
+            accumulated.concatenate(stack.pop());
+        }
+        return accumulated;
     }
 }
