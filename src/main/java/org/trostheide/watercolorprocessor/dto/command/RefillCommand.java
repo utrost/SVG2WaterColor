@@ -1,5 +1,8 @@
 package org.trostheide.watercolorprocessor.dto.command;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 /**
  * Represents a request to refill the brush at a specific station.
  * @param id Sequential command ID.
@@ -9,7 +12,8 @@ public final class RefillCommand extends Command {
     public final int id;
     public final String stationId;
 
-    public RefillCommand(int id, String stationId) {
+    @JsonCreator
+    public RefillCommand(@JsonProperty("id") int id, @JsonProperty("stationId") String stationId) {
         this.id = id;
         this.stationId = stationId;
     }

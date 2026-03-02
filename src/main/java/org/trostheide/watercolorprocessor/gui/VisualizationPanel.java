@@ -67,7 +67,6 @@ public class VisualizationPanel extends JPanel {
     private double paddingY = 0;
 
     // Refill Stations (loaded from config)
-    // Refill Stations (loaded from config)
     public record Station(String name, double x, double y) {
     }
 
@@ -286,34 +285,34 @@ public class VisualizationPanel extends JPanel {
             }
         }
 
-        // Step 2: Transform corners through rotation + swap/invert (like driver's
-        // get_transformed_point)
-        // The driver does NOT include rotation in get_transformed_point, but DOES in
-        // transform_point.
-        // This is inconsistent in the driver! But we'll match it.
-        // Actually, looking at driver code more carefully:
-        // - get_transformed_point does swap/invert only (no rotation)
-        // - alignment is based on get_transformed_point output
-        // - actual drawing uses transform_point which INCLUDES rotation
-        //
-        // So the driver's alignment doesn't account for rotation! This is likely a bug
-        // in driver.
-        // For now, let's match the driver's behavior (no rotation in bounds for
-        // alignment).
-
-        // Corners in raw coords
+        // Step 2: Transform corners through rotation + swap/invert
+        // Must match driver's get_transformed_point (which now includes rotation)
         double[][] corners = {
                 { rawMinX, rawMinY }, { rawMaxX, rawMinY },
                 { rawMinX, rawMaxY }, { rawMaxX, rawMaxY }
         };
 
-        // Transform corners with swap/invert only (matching driver's
-        // get_transformed_point)
         double tMinX = Double.MAX_VALUE, tMaxX = -Double.MAX_VALUE;
         double tMinY = Double.MAX_VALUE, tMaxY = -Double.MAX_VALUE;
 
+        double cx = (rawMinX + rawMaxX) / 2.0;
+        double cy = (rawMinY + rawMaxY) / 2.0;
+
         for (double[] c : corners) {
             double x = c[0], y = c[1];
+
+            // Apply rotation around content center (matching driver)
+            if (dataRotation != 0) {
+                double dx = x - cx;
+                double dy = y - cy;
+                switch (dataRotation) {
+                    case 90:  { double t = dx; dx = -dy; dy = t; break; }
+                    case 180: { dx = -dx; dy = -dy; break; }
+                    case 270: { double t = dx; dx = dy; dy = -t; break; }
+                }
+                x = dx + cx;
+                y = dy + cy;
+            }
 
             // Apply swap
             if (swapXY) {

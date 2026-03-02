@@ -47,29 +47,6 @@ public class SettingsPanel extends JPanel {
     private File currentConfigFile = new File("config.json");
     private final ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 
-    // DTOs for Full Config
-    // DTOs for Full Config
-    static class GeneralSettings {
-        public int modelIndex;
-        public boolean mock;
-        public boolean invertX;
-        public boolean invertY;
-        public boolean swapXY;
-        public boolean visualMirror;
-        public int speedDown;
-        public int speedUp;
-        public int penUp;
-        public int penDown;
-        public String orientation;
-        public String canvasAlignment;
-        public int viewRotation;
-        public double paddingX;
-        public double paddingY;
-    }
-
-    record AppConfig(GeneralSettings general, Map<String, StationConfig> stations) {
-    }
-
     // Validation/Control components for mass enabling/disabling
     private final JButton addBtn;
     private final JButton removeBtn;
@@ -381,16 +358,6 @@ public class SettingsPanel extends JPanel {
         mgbc.gridwidth = 3;
         JPanel penConfigPanel = new JPanel(new FlowLayout());
 
-        // We need to re-initialize spinners here? No, they are final fields.
-        // But we need to make sure they are not added twice? We removed them from TOP.
-        // But wait, the lines removed above (120-129) included the initialization
-        // `zUpSpinner = ...`.
-        // If I remove the initialization lines, `zUpSpinner` will be null!
-        // CORRECTION: I must initialize them before adding them here.
-        // Actually, the previous 'remove' block deleted the initialization. I need to
-        // re-add initialization logic here or keep it earlier.
-        // Better: Initialize them earlier (top of constructor) or just here.
-
         penConfigPanel.add(new JLabel("Up %:"));
         zUpSpinner = new JSpinner(new SpinnerNumberModel(60, 0, 100, 1));
         penConfigPanel.add(zUpSpinner);
@@ -474,7 +441,6 @@ public class SettingsPanel extends JPanel {
 
         add(rightContainer, BorderLayout.EAST);
 
-        // Initial Load
         // Initial Load
         loadConfig();
 
@@ -631,10 +597,10 @@ public class SettingsPanel extends JPanel {
             StationConfig cfg = stations.get(id);
             if (cfg != null) {
                 idField.setText(id);
-                xSpinner.setValue(cfg.x);
-                ySpinner.setValue(cfg.y);
-                zSpinner.setValue(cfg.z_down);
-                behaviorCombo.setSelectedItem(cfg.behavior);
+                xSpinner.setValue(cfg.x());
+                ySpinner.setValue(cfg.y());
+                zSpinner.setValue(cfg.z_down());
+                behaviorCombo.setSelectedItem(cfg.behavior());
             }
         }
     }
@@ -668,7 +634,7 @@ public class SettingsPanel extends JPanel {
     private void refreshTable() {
         tableModel.setRowCount(0);
         stations.forEach((id, cfg) -> {
-            tableModel.addRow(new Object[] { id, cfg.x, cfg.y, cfg.z_down, cfg.behavior });
+            tableModel.addRow(new Object[] { id, cfg.x(), cfg.y(), cfg.z_down(), cfg.behavior() });
         });
     }
 
@@ -678,41 +644,41 @@ public class SettingsPanel extends JPanel {
                 AppConfig config = mapper.readValue(currentConfigFile, AppConfig.class);
 
                 // Load General Settings
-                if (config.general != null) {
-                    modelComboBox.setSelectedIndex(config.general.modelIndex);
-                    mockCheckBox.setSelected(config.general.mock);
-                    invertXCheckBox.setSelected(config.general.invertX);
-                    invertYCheckBox.setSelected(config.general.invertY);
-                    swapXYCheckBox.setSelected(config.general.swapXY);
-                    visualMirrorCheckBox.setSelected(config.general.visualMirror);
-                    speedDownSpinner.setValue(config.general.speedDown);
-                    speedUpSpinner.setValue(config.general.speedUp);
-                    zUpSpinner.setValue(config.general.penUp);
-                    zDownSpinner.setValue(config.general.penDown);
+                GeneralSettings gen = config.general();
+                if (gen != null) {
+                    modelComboBox.setSelectedIndex(gen.modelIndex);
+                    mockCheckBox.setSelected(gen.mock);
+                    invertXCheckBox.setSelected(gen.invertX);
+                    invertYCheckBox.setSelected(gen.invertY);
+                    swapXYCheckBox.setSelected(gen.swapXY);
+                    visualMirrorCheckBox.setSelected(gen.visualMirror);
+                    speedDownSpinner.setValue(gen.speedDown);
+                    speedUpSpinner.setValue(gen.speedUp);
+                    zUpSpinner.setValue(gen.penUp);
+                    zDownSpinner.setValue(gen.penDown);
 
-                    // Restore Orientation & Alignment (with safe defaults)
-                    if ("Portrait".equals(config.general.orientation)) {
+                    if ("Portrait".equals(gen.orientation)) {
                         portraitRadio.setSelected(true);
                     } else {
                         landscapeRadio.setSelected(true);
                     }
 
-                    if (config.general.canvasAlignment != null) {
-                        canvasAlignmentCombo.setSelectedItem(config.general.canvasAlignment);
+                    if (gen.canvasAlignment != null) {
+                        canvasAlignmentCombo.setSelectedItem(gen.canvasAlignment);
                     }
 
-                    if (config.general.viewRotation > 0) {
-                        viewRotationCombo.setSelectedItem(String.valueOf(config.general.viewRotation));
+                    if (gen.viewRotation > 0) {
+                        viewRotationCombo.setSelectedItem(String.valueOf(gen.viewRotation));
                     }
 
-                    paddingXSpinner.setValue(config.general.paddingX);
-                    paddingYSpinner.setValue(config.general.paddingY);
+                    paddingXSpinner.setValue(gen.paddingX);
+                    paddingYSpinner.setValue(gen.paddingY);
                 }
 
                 // Load Stations
                 stations.clear();
-                if (config.stations != null) {
-                    stations.putAll(config.stations);
+                if (config.stations() != null) {
+                    stations.putAll(config.stations());
                 }
                 refreshTable();
 
@@ -842,7 +808,4 @@ public class SettingsPanel extends JPanel {
         }
     }
 
-    // DTO
-    record StationConfig(double x, double y, int z_down, String behavior) {
-    }
 }

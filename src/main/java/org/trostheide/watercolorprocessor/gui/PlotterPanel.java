@@ -13,10 +13,7 @@ public class PlotterPanel extends JPanel {
 
     private final JTextField jsonField;
     private final JTextField pythonPathField;
-    // Model Selection moved to SettingsPanel
-    // Model Selection moved to SettingsPanel
     private final JCheckBox verboseCheckBox;
-    // Speed spinners moved to SettingsPanel
     private final SettingsPanel settingsPanel;
     private final JTextArea consoleArea;
     private final VisualizationPanel visPanel; // New Visualizer
@@ -97,8 +94,6 @@ public class PlotterPanel extends JPanel {
         pythonPathField = new JTextField(defaultPython);
         configPanel.add(pythonPathField, gbc);
 
-        // Model Selection moved to SettingsPanel
-
         // Flags
         gbc.gridx = 0;
         gbc.gridy = 3;
@@ -108,14 +103,10 @@ public class PlotterPanel extends JPanel {
         gbc.gridx = 1;
         gbc.weightx = 0.9;
         gbc.gridwidth = 2;
-        gbc.gridwidth = 2;
         JPanel checkBoxPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        // Mock Mode moved to SettingsPanel
-        verboseCheckBox = new JCheckBox("Verbose Logging", true); // Default TRUE for debugging
+        verboseCheckBox = new JCheckBox("Verbose Logging", true);
         checkBoxPanel.add(verboseCheckBox);
         configPanel.add(checkBoxPanel, gbc);
-
-        // Speed Controls moved to SettingsPanel
 
         // Center: Split Pane for Console and Vis
         consoleArea = new JTextArea();
@@ -358,7 +349,6 @@ public class PlotterPanel extends JPanel {
         inputButton.setEnabled(false);
 
         // Re-enable config
-        // Re-enable config
         settingsPanel.setSettingsEnabled(true);
         pythonPathField.setEnabled(true);
 
@@ -464,10 +454,10 @@ public class PlotterPanel extends JPanel {
 
         // Load station markers from in-memory config (immediate update)
         List<VisualizationPanel.Station> visualStations = new ArrayList<>();
-        Map<String, SettingsPanel.StationConfig> stations = settingsPanel.getStations();
+        Map<String, StationConfig> stations = settingsPanel.getStations();
         if (stations != null) {
-            for (Map.Entry<String, SettingsPanel.StationConfig> entry : stations.entrySet()) {
-                SettingsPanel.StationConfig cfg = entry.getValue();
+            for (Map.Entry<String, StationConfig> entry : stations.entrySet()) {
+                StationConfig cfg = entry.getValue();
                 visualStations.add(new VisualizationPanel.Station(entry.getKey(), cfg.x(), cfg.y()));
             }
         }

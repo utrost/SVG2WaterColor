@@ -165,13 +165,23 @@ Instructs the driver to perform a refill sequence at the designated station.
 
 **Goal:** Translate abstract commands into hardware stepper motor movements using pyaxidraw or G-code.
 
-### **4.1 Physical Configuration (config.py)**
+### **4.1 Physical Configuration (config.json)**
 
-Decouples physical calibration from logical commands.  
-STATIONS \= {  
-"red\_wash":  { "x": 5.0, "y": 100.0, "behavior": "dip\_swirl" },  
-"blue\_detail": { "x": 5.0, "y": 120.0, "behavior": "simple\_dip" }  
+Decouples physical calibration from logical commands. The Java GUI manages all plotter settings and refill stations, saving them to a JSON configuration file (e.g., `config.json`).
+The Python driver loads this file automatically to configure hardware options and station coordinates prior to plotting.
+```json
+{
+  "general": {
+    "speedDown": 25,
+    "speedUp": 75,
+    "canvasAlignment": "center"
+  },
+  "stations": {
+    "red_wash": { "x": 5.0, "y": 100.0, "z_down": 30, "behavior": "dip_swirl" },
+    "blue_detail": { "x": 5.0, "y": 120.0, "z_down": 30, "behavior": "simple_dip" }
+  }
 }
+```
 
 ### **4.2 Functional Logic**
 
@@ -224,6 +234,13 @@ python driver/driver.py path/to/commands.json [OPTIONS]
 *   `--manual-pen [UP|DOWN]`: Manually raise/lower pen and exit.
 *   `--move-x [mm]`, `--move-y [mm]`: Manually move the head relative to current position.
 *   `--interactive-server`: Start a persistent server process for receiving commands (used by GUI).
+*   `--report-position`: Stream real-time position data (`POS:X:Y`) to standard output, allowing the Java GUI's live visualization panel to track the physical pen location.
+
+**Canvas Alignment and Layout Arguments:**
+*   `--canvas-align [top-left|top-right|bottom-left|bottom-right|center]`: Auto-calculate offset to align content on canvas.
+*   `--origin-right`: Sets Machine Origin to Top-Right (0,0 is Right). Swaps Left/Right alignment targets.
+*   `--data-rotation [0|90|180|270]`: Rotate drawing data (degrees CCW).
+*   `--padding-x [mm]`, `--padding-y [mm]`: Margins for canvas alignment.
 
 **Example:**
 Run a plot using "project_A.json" for settings, but force a specific speed:
