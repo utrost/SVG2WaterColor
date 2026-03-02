@@ -1,7 +1,7 @@
 {
   "general" : {
     "modelIndex" : 1,
-    "mock" : true,
+    "mock" : false,
     "invertX" : false,
     "invertY" : false,
     "swapXY" : true,
@@ -13,8 +13,8 @@
     "orientation" : "Portrait",
     "canvasAlignment" : "Top Right",
     "viewRotation" : 0,
-    "paddingX" : 10.0,
-    "paddingY" : 10.0
+    "paddingX" : 20.0,
+    "paddingY" : 20.0
   },
   "stations" : {
     "default_station" : {
