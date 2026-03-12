@@ -129,7 +129,7 @@ The contract between Java processor and Python driver:
 
 ## License
 
-Private repository. All rights reserved.
+AGPL-3.0 — see [LICENSE](LICENSE).
 
 ## Contributing
 
