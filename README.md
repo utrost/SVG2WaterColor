@@ -73,7 +73,7 @@ python driver/driver.py commands.json [OPTIONS]
 
 Key options: `--mock`, `--verbose`, `--config settings.json`, `--canvas-align center`, `--speed-down 25`
 
-See [ReadMe.md (full architecture doc)](ReadMe.md) for complete CLI reference.
+See [Architecture Documentation](docs/architecture.md) for the complete system specification and CLI reference.
 
 ## Project Structure
 
@@ -93,10 +93,11 @@ See [ReadMe.md (full architecture doc)](ReadMe.md) for complete CLI reference.
 │   ├── transforms.py               # Coordinate transformations
 │   ├── config.py                   # Station & hardware config loader
 │   └── mock_axidraw.py             # Simulation backend
-├── Validation scripts/             # Manual test procedures (5 scripts)
+├── validation/                     # Manual test procedures (5 scripts)
+├── docs/
+│   └── architecture.md             # Full architecture & system spec
 ├── stations.json                   # Default station configuration
-├── Requirements.md                 # Hardware constraints & system spec
-└── ReadMe.md                       # Full architecture documentation
+└── Requirements.md                 # Hardware constraints
 ```
 
 ## Command JSON Format
