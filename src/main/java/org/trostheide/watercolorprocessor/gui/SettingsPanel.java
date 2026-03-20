@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.border.TitledBorder;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.io.File;
@@ -13,7 +14,7 @@ import java.util.Map;
 
 public class SettingsPanel extends JPanel {
 
-    // General Settings (Moved from PlotterPanel)
+    // General Settings
     private final JSpinner speedDownSpinner;
     private final JSpinner speedUpSpinner;
     private JSpinner zUpSpinner;
@@ -21,15 +22,15 @@ public class SettingsPanel extends JPanel {
     private final JCheckBox invertXCheckBox;
     private final JCheckBox invertYCheckBox;
     private final JCheckBox swapXYCheckBox;
-    private JRadioButton portraitRadio; // New Field for Orientation
+    private JRadioButton portraitRadio;
     private JRadioButton landscapeRadio;
     private final JCheckBox visualMirrorCheckBox;
     private final JComboBox<String> modelComboBox;
     private final JCheckBox mockCheckBox;
     private final JComboBox<String> canvasAlignmentCombo;
-    private final JComboBox<String> viewRotationCombo; // New Field
-    private final JSpinner paddingXSpinner; // New Field
-    private final JSpinner paddingYSpinner; // New Field
+    private final JComboBox<String> viewRotationCombo;
+    private final JSpinner paddingXSpinner;
+    private final JSpinner paddingYSpinner;
 
     // Station Editor Components
     private final JTable stationTable;
@@ -47,7 +48,7 @@ public class SettingsPanel extends JPanel {
     private File currentConfigFile = new File("config.json");
     private final ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 
-    // Validation/Control components for mass enabling/disabling
+    // Buttons for mass enable/disable
     private final JButton addBtn;
     private final JButton removeBtn;
     private final JButton saveFileBtn;
@@ -57,9 +58,7 @@ public class SettingsPanel extends JPanel {
     // Callback for running driver commands
     public interface ManualControlSession {
         void sendRelativeMove(double dx, double dy);
-
         void sendPenCommand(String direction, int height);
-
         void resetServer();
     }
 
@@ -76,150 +75,187 @@ public class SettingsPanel extends JPanel {
     }
 
     public SettingsPanel() {
-        setLayout(new BorderLayout());
-        setBorder(new EmptyBorder(10, 10, 10, 10));
+        setLayout(new BorderLayout(0, 8));
+        setBorder(new EmptyBorder(12, 12, 12, 12));
 
-        // --- NORTH: General Settings ---
-        JPanel generalPanel = new JPanel(new GridBagLayout());
-        generalPanel.setBorder(BorderFactory.createTitledBorder("General Plotter Settings"));
-        GridBagConstraints gbcGen = new GridBagConstraints();
-        gbcGen.insets = new Insets(5, 10, 5, 10);
-        gbcGen.anchor = GridBagConstraints.WEST;
-        gbcGen.fill = GridBagConstraints.NONE;
+        // === Main content in a vertical box ===
+        JPanel mainContent = new JPanel();
+        mainContent.setLayout(new BoxLayout(mainContent, BoxLayout.Y_AXIS));
 
-        // Row 1: Model & Orientation Flags
-        gbcGen.gridx = 0;
-        gbcGen.gridy = 0;
+        // --- Section 1: Hardware Settings ---
+        JPanel hardwarePanel = new JPanel(new GridBagLayout());
+        hardwarePanel.setBorder(createSection("Hardware"));
+        GridBagConstraints g = new GridBagConstraints();
+        g.insets = new Insets(4, 8, 4, 8);
+        g.anchor = GridBagConstraints.WEST;
+        g.fill = GridBagConstraints.HORIZONTAL;
 
-        // Plotter Size
-        JPanel modelPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
-        modelPanel.add(new JLabel("Plotter Size:"));
+        // Row 0: Plotter Size + Orientation
+        g.gridx = 0; g.gridy = 0; g.weightx = 0;
+        hardwarePanel.add(label("Plotter Size"), g);
+
+        g.gridx = 1; g.weightx = 0.3;
         modelComboBox = new JComboBox<>(new String[] { "Standard (A4 / V3)", "Large (A3 / V3 XL)" });
-        modelComboBox.setSelectedIndex(1); // Default to A3
-        modelPanel.add(modelComboBox);
-        generalPanel.add(modelPanel, gbcGen);
+        modelComboBox.setSelectedIndex(1);
+        modelComboBox.setToolTipText("Select your AxiDraw model");
+        hardwarePanel.add(modelComboBox, g);
 
-        // Flags
-        gbcGen.gridx = 1;
-        gbcGen.weightx = 1.0;
-        JPanel flagsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        g.gridx = 2; g.weightx = 0;
+        hardwarePanel.add(label("Orientation"), g);
 
-        // Mock Mode
-        mockCheckBox = new JCheckBox("Mock Mode", false);
-        flagsPanel.add(mockCheckBox);
-
-        // Invert X
-        invertXCheckBox = new JCheckBox("Invert X");
-        invertXCheckBox.addActionListener(e -> {
-            if (manualSession != null)
-                manualSession.resetServer();
-        });
-        flagsPanel.add(invertXCheckBox);
-
-        // Invert Y
-        invertYCheckBox = new JCheckBox("Invert Y", false);
-        invertYCheckBox.addActionListener(e -> {
-            if (manualSession != null)
-                manualSession.resetServer();
-        });
-        flagsPanel.add(invertYCheckBox);
-
-        // Swap XY
-        swapXYCheckBox = new JCheckBox("Swap X/Y", true);
-        swapXYCheckBox.addActionListener(e -> {
-            if (manualSession != null)
-                manualSession.resetServer();
-            fireVisualChange();
-        });
-        flagsPanel.add(swapXYCheckBox);
-
-        // Visual Mirror
-        JCheckBox visualMirrorCheckBox = new JCheckBox("View: 0,0 Top-Right", true);
-        visualMirrorCheckBox.addActionListener(e -> fireVisualChange());
-        flagsPanel.add(visualMirrorCheckBox);
-        this.visualMirrorCheckBox = visualMirrorCheckBox;
-
-        generalPanel.add(flagsPanel, gbcGen);
-
-        // Row 1: Machine Orientation
-        gbcGen.gridx = 0;
-        gbcGen.gridy = 1;
-        gbcGen.weightx = 0.0;
-
-        JPanel orientationPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
-        orientationPanel.add(new JLabel("Orientation:"));
+        g.gridx = 3; g.weightx = 0.3;
+        JPanel orientPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        orientPanel.setOpaque(false);
         landscapeRadio = new JRadioButton("Landscape");
         portraitRadio = new JRadioButton("Portrait");
         ButtonGroup orientationGroup = new ButtonGroup();
         orientationGroup.add(landscapeRadio);
         orientationGroup.add(portraitRadio);
-        portraitRadio.setSelected(true); // Default (User Request)
-
+        portraitRadio.setSelected(true);
         landscapeRadio.addActionListener(e -> fireVisualChange());
         portraitRadio.addActionListener(e -> fireVisualChange());
+        orientPanel.add(portraitRadio);
+        orientPanel.add(landscapeRadio);
+        hardwarePanel.add(orientPanel, g);
 
-        orientationPanel.add(landscapeRadio);
-        orientationPanel.add(portraitRadio);
-        generalPanel.add(orientationPanel, gbcGen);
+        // Row 1: Speeds
+        g.gridx = 0; g.gridy = 1; g.weightx = 0;
+        hardwarePanel.add(label("Draw Speed (%)"), g);
 
-        // Row 1 (Right): Canvas Alignment
-        gbcGen.gridx = 1;
-        gbcGen.gridy = 1;
-        gbcGen.weightx = 1.0;
+        g.gridx = 1; g.weightx = 0.3;
+        speedDownSpinner = new JSpinner(new SpinnerNumberModel(25, 1, 100, 1));
+        speedDownSpinner.setToolTipText("Pen-down drawing speed as percentage of maximum");
+        hardwarePanel.add(speedDownSpinner, g);
 
-        JPanel alignPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
-        alignPanel.add(new JLabel("Canvas Alignment:"));
+        g.gridx = 2; g.weightx = 0;
+        hardwarePanel.add(label("Travel Speed (%)"), g);
+
+        g.gridx = 3; g.weightx = 0.3;
+        speedUpSpinner = new JSpinner(new SpinnerNumberModel(75, 1, 100, 1));
+        speedUpSpinner.setToolTipText("Pen-up travel speed as percentage of maximum");
+        hardwarePanel.add(speedUpSpinner, g);
+
+        // Row 2: Pen Heights
+        g.gridx = 0; g.gridy = 2; g.weightx = 0;
+        hardwarePanel.add(label("Pen Up (%)"), g);
+
+        g.gridx = 1; g.weightx = 0.3;
+        zUpSpinner = new JSpinner(new SpinnerNumberModel(60, 0, 100, 1));
+        zUpSpinner.setToolTipText("Servo position when pen is raised");
+        hardwarePanel.add(zUpSpinner, g);
+
+        g.gridx = 2; g.weightx = 0;
+        hardwarePanel.add(label("Pen Down (%)"), g);
+
+        g.gridx = 3; g.weightx = 0.3;
+        zDownSpinner = new JSpinner(new SpinnerNumberModel(30, 0, 100, 1));
+        zDownSpinner.setToolTipText("Servo position when pen is lowered");
+        hardwarePanel.add(zDownSpinner, g);
+
+        mainContent.add(hardwarePanel);
+        mainContent.add(Box.createVerticalStrut(4));
+
+        // --- Section 2: Coordinate Mapping ---
+        JPanel coordPanel = new JPanel(new GridBagLayout());
+        coordPanel.setBorder(createSection("Coordinate Mapping"));
+        GridBagConstraints c = new GridBagConstraints();
+        c.insets = new Insets(4, 8, 4, 8);
+        c.anchor = GridBagConstraints.WEST;
+        c.fill = GridBagConstraints.HORIZONTAL;
+
+        // Row 0: Flags
+        c.gridx = 0; c.gridy = 0; c.weightx = 0;
+        coordPanel.add(label("Axes"), c);
+
+        c.gridx = 1; c.weightx = 1.0; c.gridwidth = 3;
+        JPanel flagsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
+        flagsPanel.setOpaque(false);
+
+        mockCheckBox = new JCheckBox("Mock Mode", false);
+        mockCheckBox.setToolTipText("Simulate plotter without hardware");
+        flagsPanel.add(mockCheckBox);
+
+        invertXCheckBox = new JCheckBox("Invert X");
+        invertXCheckBox.setToolTipText("Mirror the X axis for custom motor wiring");
+        invertXCheckBox.addActionListener(e -> {
+            if (manualSession != null) manualSession.resetServer();
+        });
+        flagsPanel.add(invertXCheckBox);
+
+        invertYCheckBox = new JCheckBox("Invert Y", false);
+        invertYCheckBox.setToolTipText("Mirror the Y axis for custom motor wiring");
+        invertYCheckBox.addActionListener(e -> {
+            if (manualSession != null) manualSession.resetServer();
+        });
+        flagsPanel.add(invertYCheckBox);
+
+        swapXYCheckBox = new JCheckBox("Swap X/Y", true);
+        swapXYCheckBox.setToolTipText("Swap motor X and Y axes");
+        swapXYCheckBox.addActionListener(e -> {
+            if (manualSession != null) manualSession.resetServer();
+            fireVisualChange();
+        });
+        flagsPanel.add(swapXYCheckBox);
+
+        JCheckBox visualMirrorCb = new JCheckBox("View: 0,0 Top-Right", true);
+        visualMirrorCb.setToolTipText("Display origin at top-right to match physical plotter");
+        visualMirrorCb.addActionListener(e -> fireVisualChange());
+        flagsPanel.add(visualMirrorCb);
+        this.visualMirrorCheckBox = visualMirrorCb;
+
+        coordPanel.add(flagsPanel, c);
+
+        // Row 1: Alignment + Rotation
+        c.gridx = 0; c.gridy = 1; c.weightx = 0; c.gridwidth = 1;
+        coordPanel.add(label("Canvas Align"), c);
+
+        c.gridx = 1; c.weightx = 0.3;
         canvasAlignmentCombo = new JComboBox<>(new String[] {
                 "Top Left", "Top Right", "Bottom Left", "Bottom Right", "Center"
         });
-        canvasAlignmentCombo.setSelectedItem("Top Right"); // Default
-        canvasAlignmentCombo.setToolTipText("Align the drawing to a specific corner of the machine bed.");
+        canvasAlignmentCombo.setSelectedItem("Top Right");
+        canvasAlignmentCombo.setToolTipText("Align the drawing to a corner of the machine bed");
         canvasAlignmentCombo.addActionListener(e -> fireVisualChange());
-        alignPanel.add(canvasAlignmentCombo);
+        coordPanel.add(canvasAlignmentCombo, c);
 
-        // Rotation
-        alignPanel.add(new JLabel("Rot:"));
+        c.gridx = 2; c.weightx = 0;
+        coordPanel.add(label("Rotation"), c);
+
+        c.gridx = 3; c.weightx = 0.3;
         viewRotationCombo = new JComboBox<>(new String[] { "0", "90", "180", "270" });
-        viewRotationCombo.setToolTipText("Rotate view (CCW)");
+        viewRotationCombo.setToolTipText("Rotate drawing data (counter-clockwise degrees)");
         viewRotationCombo.addActionListener(e -> fireVisualChange());
-        alignPanel.add(viewRotationCombo);
+        coordPanel.add(viewRotationCombo, c);
 
-        // Padding
-        alignPanel.add(new JLabel("Pad X (mm):"));
+        // Row 2: Padding
+        c.gridx = 0; c.gridy = 2; c.weightx = 0;
+        coordPanel.add(label("Padding X (mm)"), c);
+
+        c.gridx = 1; c.weightx = 0.3;
         paddingXSpinner = new JSpinner(new SpinnerNumberModel(0.0, -100.0, 100.0, 1.0));
+        paddingXSpinner.setToolTipText("Horizontal offset from alignment edge");
         paddingXSpinner.addChangeListener(e -> fireVisualChange());
-        alignPanel.add(paddingXSpinner);
+        coordPanel.add(paddingXSpinner, c);
 
-        alignPanel.add(new JLabel("Pad Y (mm):"));
+        c.gridx = 2; c.weightx = 0;
+        coordPanel.add(label("Padding Y (mm)"), c);
+
+        c.gridx = 3; c.weightx = 0.3;
         paddingYSpinner = new JSpinner(new SpinnerNumberModel(0.0, -100.0, 100.0, 1.0));
+        paddingYSpinner.setToolTipText("Vertical offset from alignment edge");
         paddingYSpinner.addChangeListener(e -> fireVisualChange());
-        alignPanel.add(paddingYSpinner);
+        coordPanel.add(paddingYSpinner, c);
 
-        generalPanel.add(alignPanel, gbcGen);
+        mainContent.add(coordPanel);
+        mainContent.add(Box.createVerticalStrut(4));
 
-        // Row 3: Speeds
-        gbcGen.gridx = 0;
-        gbcGen.gridy = 2;
-        gbcGen.gridwidth = 2;
-        gbcGen.weightx = 0.0;
+        // === Bottom half: Stations + Manual Control in a horizontal split ===
+        JPanel bottomHalf = new JPanel(new GridLayout(1, 2, 8, 0));
 
-        JPanel speedPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 20, 0));
+        // --- Section 3: Station Management ---
+        JPanel stationPanel = new JPanel(new BorderLayout(0, 6));
+        stationPanel.setBorder(createSection("Paint Stations"));
 
-        // Speed Down
-        speedPanel.add(new JLabel("Draw Speed (%):"));
-        speedDownSpinner = new JSpinner(new SpinnerNumberModel(25, 1, 100, 1));
-        speedPanel.add(speedDownSpinner);
-
-        // Speed Up
-        speedPanel.add(new JLabel("Travel Speed (%):"));
-        speedUpSpinner = new JSpinner(new SpinnerNumberModel(75, 1, 100, 1));
-        speedPanel.add(speedUpSpinner);
-
-        generalPanel.add(speedPanel, gbcGen);
-
-        add(generalPanel, BorderLayout.NORTH);
-
-        // --- CENTER: Station Table ---
         tableModel = new DefaultTableModel(new String[] { "ID", "X (mm)", "Y (mm)", "Z Down", "Behavior" }, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -228,104 +264,101 @@ public class SettingsPanel extends JPanel {
         };
         stationTable = new JTable(tableModel);
         stationTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        stationTable.setRowHeight(24);
         stationTable.getSelectionModel().addListSelectionListener(e -> loadSelection());
 
-        JScrollPane scrollPane = new JScrollPane(stationTable);
-        scrollPane.setBorder(BorderFactory.createTitledBorder("Configured Stations"));
-        add(scrollPane, BorderLayout.CENTER);
+        JScrollPane tableScroll = new JScrollPane(stationTable);
+        stationPanel.add(tableScroll, BorderLayout.CENTER);
 
-        // --- EAST: Station Editor Form ---
+        // Station editor form
         JPanel formPanel = new JPanel(new GridBagLayout());
-        formPanel.setBorder(BorderFactory.createTitledBorder("Edit Station"));
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5, 5, 5, 5);
-        gbc.fill = GridBagConstraints.HORIZONTAL;
+        GridBagConstraints fg = new GridBagConstraints();
+        fg.insets = new Insets(3, 6, 3, 6);
+        fg.fill = GridBagConstraints.HORIZONTAL;
 
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        formPanel.add(new JLabel("ID:"), gbc);
-        gbc.gridx = 1;
-        idField = new JTextField(10);
-        formPanel.add(idField, gbc);
+        fg.gridx = 0; fg.gridy = 0; fg.weightx = 0;
+        formPanel.add(label("ID"), fg);
+        fg.gridx = 1; fg.weightx = 0.5;
+        idField = new JTextField(8);
+        formPanel.add(idField, fg);
 
-        gbc.gridx = 0;
-        gbc.gridy = 1;
-        formPanel.add(new JLabel("X (mm):"), gbc);
-        gbc.gridx = 1;
+        fg.gridx = 2; fg.weightx = 0;
+        formPanel.add(label("X"), fg);
+        fg.gridx = 3; fg.weightx = 0.25;
         xSpinner = new JSpinner(new SpinnerNumberModel(0.0, 0.0, 300.0, 1.0));
-        formPanel.add(xSpinner, gbc);
+        formPanel.add(xSpinner, fg);
 
-        gbc.gridx = 0;
-        gbc.gridy = 2;
-        formPanel.add(new JLabel("Y (mm):"), gbc);
-        gbc.gridx = 1;
+        fg.gridx = 4; fg.weightx = 0;
+        formPanel.add(label("Y"), fg);
+        fg.gridx = 5; fg.weightx = 0.25;
         ySpinner = new JSpinner(new SpinnerNumberModel(0.0, 0.0, 300.0, 1.0));
-        formPanel.add(ySpinner, gbc);
+        formPanel.add(ySpinner, fg);
 
-        gbc.gridx = 0;
-        gbc.gridy = 3;
-        formPanel.add(new JLabel("Z Down (%):"), gbc);
-        gbc.gridx = 1;
+        fg.gridx = 0; fg.gridy = 1; fg.weightx = 0;
+        formPanel.add(label("Z Down (%)"), fg);
+        fg.gridx = 1; fg.weightx = 0.25;
         zSpinner = new JSpinner(new SpinnerNumberModel(30, 0, 100, 1));
-        formPanel.add(zSpinner, gbc);
+        formPanel.add(zSpinner, fg);
 
-        gbc.gridx = 0;
-        gbc.gridy = 4;
-        formPanel.add(new JLabel("Behavior:"), gbc);
-        gbc.gridx = 1;
+        fg.gridx = 2; fg.weightx = 0;
+        formPanel.add(label("Behavior"), fg);
+        fg.gridx = 3; fg.weightx = 0.5; fg.gridwidth = 3;
         behaviorCombo = new JComboBox<>(new String[] { "simple_dip", "dip_swirl" });
-        formPanel.add(behaviorCombo, gbc);
+        formPanel.add(behaviorCombo, fg);
 
-        // Buttons
-        JPanel btnPanel = new JPanel(new FlowLayout());
+        fg.gridx = 0; fg.gridy = 2; fg.gridwidth = 3; fg.weightx = 0;
+        fg.fill = GridBagConstraints.NONE;
+        fg.anchor = GridBagConstraints.CENTER;
+        JPanel stationBtnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
         addBtn = new JButton("Add / Update");
+        addBtn.putClientProperty("JButton.buttonType", "roundRect");
         addBtn.addActionListener(e -> saveStation());
         removeBtn = new JButton("Remove");
+        removeBtn.putClientProperty("JButton.buttonType", "roundRect");
         removeBtn.addActionListener(e -> removeStation());
+        stationBtnPanel.add(addBtn);
+        stationBtnPanel.add(removeBtn);
+        formPanel.add(stationBtnPanel, fg);
 
-        btnPanel.add(addBtn);
-        btnPanel.add(removeBtn);
+        fg.gridx = 3; fg.gridwidth = 3;
+        // empty to balance
 
-        gbc.gridx = 0;
-        gbc.gridy = 5;
-        gbc.gridwidth = 2;
-        formPanel.add(btnPanel, gbc);
+        stationPanel.add(formPanel, BorderLayout.SOUTH);
 
-        // --- NEW: Manual Controls Panel ---
-        JPanel manualPanel = new JPanel(new GridBagLayout());
-        manualPanel.setBorder(BorderFactory.createTitledBorder("Manual Control"));
+        bottomHalf.add(stationPanel);
+
+        // --- Section 4: Manual Control ---
+        JPanel manualPanel = new JPanel(new BorderLayout(0, 8));
+        manualPanel.setBorder(createSection("Manual Control"));
+
+        // Jog controls
+        JPanel jogPanel = new JPanel(new GridBagLayout());
         GridBagConstraints mgbc = new GridBagConstraints();
-        mgbc.insets = new Insets(5, 5, 5, 5);
+        mgbc.insets = new Insets(4, 4, 4, 4);
         mgbc.fill = GridBagConstraints.BOTH;
 
         // Step Size
-        mgbc.gridx = 0;
-        mgbc.gridy = 0;
-        mgbc.gridwidth = 3;
-        JPanel stepPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        stepPanel.add(new JLabel("Step (mm):"));
+        mgbc.gridx = 0; mgbc.gridy = 0; mgbc.gridwidth = 3;
+        JPanel stepPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 6, 0));
+        stepPanel.setOpaque(false);
+        stepPanel.add(label("Step (mm)"));
         JSpinner stepSpinner = new JSpinner(new SpinnerNumberModel(10.0, 0.1, 100.0, 1.0));
         stepPanel.add(stepSpinner);
-        manualPanel.add(stepPanel, mgbc);
+        jogPanel.add(stepPanel, mgbc);
 
         // Direction Buttons
-        JButton btnUp = new JButton("▲ (-Y)");
-        JButton btnDown = new JButton("▼ (+Y)");
-        JButton btnLeft = new JButton("◀ (+X)");
-        JButton btnRight = new JButton("▶ (-X)");
+        JButton btnUp = createJogButton("Up (-Y)");
+        JButton btnDown = createJogButton("Down (+Y)");
+        JButton btnLeft = createJogButton("Left (+X)");
+        JButton btnRight = createJogButton("Right (-X)");
 
-        // Actions
         java.awt.event.ActionListener moveAction = e -> {
             double step = (Double) stepSpinner.getValue();
             double dx = 0, dy = 0;
-            if (e.getSource() == btnUp)
-                dy = -step; // User: Y- goes up
-            else if (e.getSource() == btnDown)
-                dy = step; // User: Y+ goes down
-            else if (e.getSource() == btnLeft)
-                dx = step; // User: X+ goes left
-            else if (e.getSource() == btnRight)
-                dx = -step; // User: X- goes right
+            if (e.getSource() == btnUp) dy = -step;
+            else if (e.getSource() == btnDown) dy = step;
+            else if (e.getSource() == btnLeft) dx = step;
+            else if (e.getSource() == btnRight) dx = -step;
             runManualMove(dx, dy);
         };
 
@@ -334,52 +367,29 @@ public class SettingsPanel extends JPanel {
         btnLeft.addActionListener(moveAction);
         btnRight.addActionListener(moveAction);
 
-        // Layout Buttons (Cross shape)
         mgbc.gridwidth = 1;
-        mgbc.gridx = 1;
-        mgbc.gridy = 1;
-        manualPanel.add(btnUp, mgbc); // Top
-        mgbc.gridx = 0;
-        mgbc.gridy = 2;
-        manualPanel.add(btnLeft, mgbc); // Left
-        mgbc.gridx = 2;
-        mgbc.gridy = 2;
-        manualPanel.add(btnRight, mgbc);// Right
-        mgbc.gridx = 1;
-        mgbc.gridy = 3;
-        manualPanel.add(btnDown, mgbc); // Bottom
+        mgbc.gridx = 1; mgbc.gridy = 1;
+        jogPanel.add(btnUp, mgbc);
+        mgbc.gridx = 0; mgbc.gridy = 2;
+        jogPanel.add(btnLeft, mgbc);
+        mgbc.gridx = 2; mgbc.gridy = 2;
+        jogPanel.add(btnRight, mgbc);
+        mgbc.gridx = 1; mgbc.gridy = 3;
+        jogPanel.add(btnDown, mgbc);
 
-        mgbc.gridy = 3;
-        manualPanel.add(btnDown, mgbc); // Bottom
-
-        // Pen Height Config
-        mgbc.gridx = 0;
-        mgbc.gridy = 4;
-        mgbc.gridwidth = 3;
-        JPanel penConfigPanel = new JPanel(new FlowLayout());
-
-        penConfigPanel.add(new JLabel("Up %:"));
-        zUpSpinner = new JSpinner(new SpinnerNumberModel(60, 0, 100, 1));
-        penConfigPanel.add(zUpSpinner);
-
-        penConfigPanel.add(new JLabel("Down %:"));
-        zDownSpinner = new JSpinner(new SpinnerNumberModel(30, 0, 100, 1));
-        penConfigPanel.add(zDownSpinner);
-
-        manualPanel.add(penConfigPanel, mgbc);
+        manualPanel.add(jogPanel, BorderLayout.CENTER);
 
         // Pen Controls
-        mgbc.gridx = 0;
-        mgbc.gridy = 5;
-        mgbc.gridwidth = 3;
-        JPanel penBtnPanel = new JPanel(new FlowLayout());
+        JPanel penPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
         JButton testUpBtn = new JButton("Pen UP");
+        testUpBtn.putClientProperty("JButton.buttonType", "roundRect");
         testUpBtn.addActionListener(e -> runManualPen("UP"));
         JButton testDownBtn = new JButton("Pen DOWN");
+        testDownBtn.putClientProperty("JButton.buttonType", "roundRect");
         testDownBtn.addActionListener(e -> runManualPen("DOWN"));
-        penBtnPanel.add(testUpBtn);
-        penBtnPanel.add(testDownBtn);
-        manualPanel.add(penBtnPanel, mgbc);
+        penPanel.add(testUpBtn);
+        penPanel.add(testDownBtn);
+        manualPanel.add(penPanel, BorderLayout.SOUTH);
 
         // Key Bindings
         InputMap im = manualPanel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
@@ -411,105 +421,78 @@ public class SettingsPanel extends JPanel {
             }
         });
 
-        // --- EAST Container Assembly ---
-        JPanel rightContainer = new JPanel(new BorderLayout());
-        JPanel topRight = new JPanel(new BorderLayout());
-        topRight.add(formPanel, BorderLayout.NORTH);
-        topRight.add(manualPanel, BorderLayout.CENTER);
+        bottomHalf.add(manualPanel);
 
-        rightContainer.add(topRight, BorderLayout.NORTH);
+        mainContent.add(bottomHalf);
 
-        // Save to File Button
-        // Save/Load Config
-        JPanel fileBtnPanel = new JPanel(new GridLayout(3, 1, 5, 5));
+        add(mainContent, BorderLayout.CENTER);
+
+        // --- Bottom: Config File Controls ---
+        JPanel configBar = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
 
         activeConfigLabel = new JLabel("Config: " + currentConfigFile.getName());
-        activeConfigLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        fileBtnPanel.add(activeConfigLabel);
+        activeConfigLabel.setFont(activeConfigLabel.getFont().deriveFont(Font.ITALIC, 11f));
+        configBar.add(activeConfigLabel);
 
         saveFileBtn = new JButton("Save Config As...");
-        saveFileBtn.setFont(saveFileBtn.getFont().deriveFont(Font.BOLD));
+        saveFileBtn.putClientProperty("JButton.buttonType", "roundRect");
         saveFileBtn.addActionListener(e -> saveAs());
+        configBar.add(saveFileBtn);
 
         loadFileBtn = new JButton("Load Config...");
+        loadFileBtn.putClientProperty("JButton.buttonType", "roundRect");
         loadFileBtn.addActionListener(e -> loadFrom());
+        configBar.add(loadFileBtn);
 
-        fileBtnPanel.add(saveFileBtn);
-        fileBtnPanel.add(loadFileBtn);
-
-        rightContainer.add(fileBtnPanel, BorderLayout.SOUTH);
-
-        add(rightContainer, BorderLayout.EAST);
+        add(configBar, BorderLayout.SOUTH);
 
         // Initial Load
         loadConfig();
 
-        // --- Listeners for Auto-Restart on Spinner Change ---
-        // Moved here to ensure all components (especially zUp/zDown) are initialized.
+        // Listeners for auto-restart on spinner change
         javax.swing.event.ChangeListener valueChange = e -> {
-            if (manualSession != null)
-                manualSession.resetServer();
+            if (manualSession != null) manualSession.resetServer();
         };
-
         speedDownSpinner.addChangeListener(valueChange);
         speedUpSpinner.addChangeListener(valueChange);
         zUpSpinner.addChangeListener(valueChange);
         zDownSpinner.addChangeListener(valueChange);
     }
 
+    private JLabel label(String text) {
+        JLabel l = new JLabel(text);
+        l.setFont(l.getFont().deriveFont(12f));
+        return l;
+    }
+
+    private TitledBorder createSection(String title) {
+        TitledBorder border = BorderFactory.createTitledBorder(title);
+        border.setTitleFont(border.getTitleFont().deriveFont(Font.BOLD, 12f));
+        return border;
+    }
+
+    private JButton createJogButton(String text) {
+        JButton btn = new JButton(text);
+        btn.setPreferredSize(new Dimension(90, 36));
+        btn.putClientProperty("JButton.buttonType", "roundRect");
+        btn.setFont(btn.getFont().deriveFont(11f));
+        return btn;
+    }
+
     // --- Public Accessors for PlotterPanel ---
-    public int getDrawSpeed() {
-        return (Integer) speedDownSpinner.getValue();
-    }
-
-    public int getTravelSpeed() {
-        return (Integer) speedUpSpinner.getValue();
-    }
-
-    // Index 0 -> Model 1 (A4), Index 1 -> Model 2 (A3)
-    public int getPlotterModelIndex() {
-        return modelComboBox.getSelectedIndex();
-    }
-
-    public int getPenUpHeight() {
-        return (Integer) zUpSpinner.getValue();
-    }
-
-    public int getPenDownHeight() {
-        return (Integer) zDownSpinner.getValue();
-    }
-
-    public boolean isMockMode() {
-        return mockCheckBox.isSelected();
-    }
-
-    public boolean isInvertX() {
-        return invertXCheckBox.isSelected();
-    }
-
-    public boolean isInvertY() {
-        return invertYCheckBox.isSelected();
-    }
-
-    public boolean isSwapXY() {
-        return swapXYCheckBox.isSelected();
-    }
-
-    public boolean isVisualMirror() {
-        return visualMirrorCheckBox.isSelected();
-    }
-
-    public String getCanvasAlignment() {
-        return (String) canvasAlignmentCombo.getSelectedItem();
-    }
-
-    public double getPaddingX() {
-        return (Double) paddingXSpinner.getValue();
-    }
-
-    public double getPaddingY() {
-        return (Double) paddingYSpinner.getValue();
-    }
+    public int getDrawSpeed() { return (Integer) speedDownSpinner.getValue(); }
+    public int getTravelSpeed() { return (Integer) speedUpSpinner.getValue(); }
+    public int getPlotterModelIndex() { return modelComboBox.getSelectedIndex(); }
+    public int getPenUpHeight() { return (Integer) zUpSpinner.getValue(); }
+    public int getPenDownHeight() { return (Integer) zDownSpinner.getValue(); }
+    public boolean isMockMode() { return mockCheckBox.isSelected(); }
+    public boolean isInvertX() { return invertXCheckBox.isSelected(); }
+    public boolean isInvertY() { return invertYCheckBox.isSelected(); }
+    public boolean isSwapXY() { return swapXYCheckBox.isSelected(); }
+    public boolean isVisualMirror() { return visualMirrorCheckBox.isSelected(); }
+    public String getCanvasAlignment() { return (String) canvasAlignmentCombo.getSelectedItem(); }
+    public double getPaddingX() { return (Double) paddingXSpinner.getValue(); }
+    public double getPaddingY() { return (Double) paddingYSpinner.getValue(); }
 
     public String getOrientation() {
         if (portraitRadio != null && portraitRadio.isSelected())
@@ -529,22 +512,19 @@ public class SettingsPanel extends JPanel {
         boolean isPortrait = portraitRadio != null && portraitRadio.isSelected();
         double w;
         if (getPlotterModelIndex() == 0)
-            w = 297; // A4 Width (Landscape)
+            w = 297;
         else
-            w = 430; // A3 Width (Landscape)
-
+            w = 430;
         return isPortrait ? getMachineHeightLimit() : w;
     }
 
     private double getMachineHeightLimit() {
-        if (getPlotterModelIndex() == 0)
-            return 210;
+        if (getPlotterModelIndex() == 0) return 210;
         return 297;
     }
 
     public double getMachineHeight() {
         boolean isPortrait = portraitRadio != null && portraitRadio.isSelected();
-
         if (isPortrait) {
             return (getPlotterModelIndex() == 0) ? 297 : 430;
         }
@@ -562,7 +542,6 @@ public class SettingsPanel extends JPanel {
         invertYCheckBox.setEnabled(enabled);
         swapXYCheckBox.setEnabled(enabled);
         visualMirrorCheckBox.setEnabled(enabled);
-
         stationTable.setEnabled(enabled);
         idField.setEnabled(enabled);
         xSpinner.setEnabled(enabled);
@@ -573,22 +552,13 @@ public class SettingsPanel extends JPanel {
         removeBtn.setEnabled(enabled);
         saveFileBtn.setEnabled(enabled);
         loadFileBtn.setEnabled(enabled);
-
     }
 
-    public void setManualSession(ManualControlSession session) {
-        this.manualSession = session;
-    }
+    public void setManualSession(ManualControlSession session) { this.manualSession = session; }
+    public File getCurrentConfigFile() { return currentConfigFile; }
+    public Map<String, StationConfig> getStations() { return stations; }
 
-    public File getCurrentConfigFile() {
-        return currentConfigFile;
-    }
-
-    public Map<String, StationConfig> getStations() {
-        return stations;
-    }
-
-    // --- Internal Logic (Same as StationEditorPanel) ---
+    // --- Internal Logic ---
 
     private void loadSelection() {
         int row = stationTable.getSelectedRow();
@@ -607,8 +577,7 @@ public class SettingsPanel extends JPanel {
 
     private void saveStation() {
         String id = idField.getText().trim();
-        if (id.isEmpty())
-            return;
+        if (id.isEmpty()) return;
 
         StationConfig cfg = new StationConfig(
                 (Double) xSpinner.getValue(),
@@ -618,7 +587,7 @@ public class SettingsPanel extends JPanel {
 
         stations.put(id, cfg);
         refreshTable();
-        fireVisualChange(); // Refresh station markers in visualization
+        fireVisualChange();
     }
 
     private void removeStation() {
@@ -627,7 +596,7 @@ public class SettingsPanel extends JPanel {
             stations.remove(id);
             refreshTable();
             idField.setText("");
-            fireVisualChange(); // Refresh station markers in visualization
+            fireVisualChange();
         }
     }
 
@@ -643,7 +612,6 @@ public class SettingsPanel extends JPanel {
             try {
                 AppConfig config = mapper.readValue(currentConfigFile, AppConfig.class);
 
-                // Load General Settings
                 GeneralSettings gen = config.general();
                 if (gen != null) {
                     modelComboBox.setSelectedIndex(gen.modelIndex);
@@ -675,7 +643,6 @@ public class SettingsPanel extends JPanel {
                     paddingYSpinner.setValue(gen.paddingY);
                 }
 
-                // Load Stations
                 stations.clear();
                 if (config.stations() != null) {
                     stations.putAll(config.stations());
@@ -687,7 +654,6 @@ public class SettingsPanel extends JPanel {
                 JOptionPane.showMessageDialog(this, "Failed to load config: " + e.getMessage());
             }
         } else if (legacyStationFile.exists()) {
-            // Fallback to legacy stations.json
             try {
                 Map<String, Object> map = mapper.readValue(legacyStationFile, Map.class);
                 stations.clear();
@@ -705,12 +671,10 @@ public class SettingsPanel extends JPanel {
                 JOptionPane.showMessageDialog(this, "Failed to load legacy stations.json: " + e.getMessage());
             }
         } else {
-            // Defaults
             stations.put("default_station", new StationConfig(5.0, 50.0, 20, "simple_dip"));
             refreshTable();
         }
 
-        // Ensure visual state is updated after load
         fireVisualChange();
         updateConfigLabel();
     }
@@ -723,14 +687,12 @@ public class SettingsPanel extends JPanel {
     }
 
     private double getDouble(Object o) {
-        if (o instanceof Number)
-            return ((Number) o).doubleValue();
+        if (o instanceof Number) return ((Number) o).doubleValue();
         return 0.0;
     }
 
     private int getInt(Object o) {
-        if (o instanceof Number)
-            return ((Number) o).intValue();
+        if (o instanceof Number) return ((Number) o).intValue();
         return 0;
     }
 
@@ -749,7 +711,7 @@ public class SettingsPanel extends JPanel {
         if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             currentConfigFile = fc.getSelectedFile();
             loadConfig();
-            fireVisualChange(); // Refresh station markers in visualization
+            fireVisualChange();
         }
     }
 
@@ -807,5 +769,4 @@ public class SettingsPanel extends JPanel {
             manualSession.sendRelativeMove(dx, dy);
         }
     }
-
 }
