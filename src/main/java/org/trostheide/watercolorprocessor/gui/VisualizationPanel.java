@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import javax.swing.*;
+import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.Path2D;
@@ -137,8 +138,10 @@ public class VisualizationPanel extends JPanel {
     }
 
     public VisualizationPanel() {
-        setBackground(Color.WHITE);
-        setBorder(BorderFactory.createTitledBorder("Live View"));
+        setBackground(new Color(35, 35, 40));
+        TitledBorder border = BorderFactory.createTitledBorder("Live View");
+        border.setTitleFont(border.getTitleFont().deriveFont(Font.BOLD, 12f));
+        setBorder(border);
     }
 
     // ----- Data Loading -----
@@ -492,10 +495,10 @@ public class VisualizationPanel extends JPanel {
         g2.scale(scale, scale);
 
         // --- Draw Machine Bed ---
-        g2.setColor(new Color(245, 245, 255));
+        g2.setColor(new Color(50, 52, 58));
         g2.fill(new java.awt.geom.Rectangle2D.Double(0, 0, machineWidth, machineHeight));
-        g2.setColor(Color.LIGHT_GRAY);
-        g2.setStroke(new BasicStroke((float) (1.0 / scale)));
+        g2.setColor(new Color(80, 82, 90));
+        g2.setStroke(new BasicStroke((float) (1.5 / scale)));
         g2.draw(new java.awt.geom.Rectangle2D.Double(0, 0, machineWidth, machineHeight));
 
         // --- Draw Origin Marker (Physical 0,0 = Screen Top-Right) ---
@@ -504,7 +507,7 @@ public class VisualizationPanel extends JPanel {
         double markerR = 5 / scale;
         g2.fill(new java.awt.geom.Ellipse2D.Double(originScreen[0] - markerR, originScreen[1] - markerR,
                 markerR * 2, markerR * 2));
-        g2.setColor(Color.DARK_GRAY);
+        g2.setColor(new Color(200, 200, 200));
         g2.setFont(g2.getFont().deriveFont((float) (12 / scale)));
         g2.drawString("0,0 (Origin)", (float) (originScreen[0] - 50 / scale), (float) (originScreen[1] + 15 / scale));
 
@@ -528,19 +531,19 @@ public class VisualizationPanel extends JPanel {
         for (Station station : stations) {
             // Station coords are in raw input space, transform to screen
             double[] sScreen = physicalToScreen(station.x(), station.y());
-            g2.setColor(new Color(0, 128, 255)); // Blue marker
+            g2.setColor(new Color(80, 180, 255)); // Blue marker
             double stationR = 4 / scale;
             g2.fill(new java.awt.geom.Ellipse2D.Double(sScreen[0] - stationR, sScreen[1] - stationR,
                     stationR * 2, stationR * 2));
             // Draw station label
-            g2.setColor(Color.DARK_GRAY);
+            g2.setColor(new Color(190, 190, 190));
             g2.setFont(g2.getFont().deriveFont((float) (9 / scale)));
             g2.drawString(station.name(), (float) (sScreen[0] + stationR + 2 / scale),
                     (float) (sScreen[1] + 4 / scale));
         }
 
         // --- Draw Paths ---
-        g2.setColor(new Color(50, 50, 150));
+        g2.setColor(new Color(130, 160, 255));
         g2.setStroke(new BasicStroke((float) (1.0 / scale)));
 
         for (List<Point2D> path : allPaths) {
@@ -576,7 +579,7 @@ public class VisualizationPanel extends JPanel {
         g2.setTransform(old);
 
         // --- HUD ---
-        g2.setColor(Color.BLACK);
+        g2.setColor(new Color(180, 180, 180));
         g2.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
         g2.drawString(String.format(
                 "PhysPos: %.1f, %.1f | Align: %s | Rot: %d | Swap: %s | InvX: %s | InvY: %s",
