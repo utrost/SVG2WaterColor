@@ -1,5 +1,7 @@
 # SVG2WaterColor
 
+![Plotter GUI — Live View](docs/plotter-gui-screenshot.jpg)
+
 A two-stage pipeline that transforms multi-layered SVG vector designs into physical watercolor paintings via pen plotter. The system handles the unique challenges of painting with real brushes and water-based paint: automatic refill scheduling, multi-station paint management, and precise coordinate mapping between digital canvas and physical machine.
 
 ## How It Works
