@@ -256,7 +256,9 @@ public class PlotterPanel extends JPanel {
         cmd.add("--padding-y");
         cmd.add(String.valueOf(settingsPanel.getPaddingY()));
 
-        cmd.add("--origin-right");
+        if (settingsPanel.isOriginRight()) {
+            cmd.add("--origin-right");
+        }
 
         int rotation = settingsPanel.getViewRotation();
         if (rotation != 0) {
@@ -442,6 +444,7 @@ public class PlotterPanel extends JPanel {
     private void updateVisualSettings() {
         appendToConsole("[DEBUG] Visual Settings Update: Align=" + settingsPanel.getCanvasAlignment());
         visPanel.setMachineSize(settingsPanel.getMachineWidth(), settingsPanel.getMachineHeight());
+        visPanel.setMachineOrigin(settingsPanel.getMachineOrigin());
 
         visPanel.setDataInvertX(settingsPanel.isInvertX());
         visPanel.setDataInvertY(settingsPanel.isInvertY());
