@@ -1,7 +1,5 @@
 import time
 
-import serial
-
 from backend import PlotterBackend, BackendOptions
 
 
@@ -46,6 +44,7 @@ class GcodeBackend(PlotterBackend):
 
     def connect(self) -> bool:
         try:
+            import serial
             self._serial = serial.Serial(
                 self.options.serial_port,
                 self.options.baud_rate,

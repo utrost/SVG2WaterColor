@@ -201,6 +201,32 @@ def load_station_config(custom_path=None):
             except Exception as e:
                 print(f"ERROR: Failed to load stations.json: {e}")
 
+def _create_backend(args, loaded_general):
+    if args.mock:
+        print("INFO: Force Mock Mode selected.")
+        return MockAxiDraw()
+
+    if args.backend == 'gcode':
+        from gcode_backend import GcodeBackend
+        gcode_cfg = loaded_general.get('gcode', {}) if loaded_general else {}
+        if args.serial_port:
+            gcode_cfg['serial_port'] = args.serial_port
+        if args.machine_width:
+            gcode_cfg['machine_width'] = args.machine_width
+        if args.machine_height:
+            gcode_cfg['machine_height'] = args.machine_height
+        print(f"INFO: Initializing G-code backend (port: {gcode_cfg.get('serial_port', '/dev/ttyUSB0')})")
+        return GcodeBackend(gcode_config=gcode_cfg)
+
+    if axidraw is None:
+        print("WARNING: pyaxidraw not found. Falling back to MOCK AxiDraw.")
+        return MockAxiDraw()
+
+    print("INFO: Initializing REAL AxiDraw...")
+    from axidraw_backend import AxiDrawBackend
+    return AxiDrawBackend(axidraw)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Watercolor Driver')
     parser.add_argument('input', nargs='?', help='Input JSON file (optional if --manual-pen used)')
@@ -220,6 +246,11 @@ def main():
     parser.add_argument('--interactive-server', action='store_true', help='Run in persistent server mode for manual control')
     parser.add_argument('--report-position', action='store_true', help='Report realtime position for GUI')
     parser.add_argument('--config', help='Path to custom configuration file')
+    parser.add_argument('--backend', choices=['axidraw', 'gcode'], default='axidraw',
+                        help='Plotter backend (axidraw or gcode)')
+    parser.add_argument('--serial-port', help='Serial port for gcode backend')
+    parser.add_argument('--machine-width', type=float, default=None, help='Machine width in mm (gcode)')
+    parser.add_argument('--machine-height', type=float, default=None, help='Machine height in mm (gcode)')
 
     # Canvas Alignment Args
     parser.add_argument('--canvas-align', choices=['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center'],
@@ -259,16 +290,12 @@ def main():
 
     print(f"INFO: Active Configuration -> Model: {args.model}, Mock: {args.mock}, InvertX: {args.invert_x}, InvertY: {args.invert_y}, SwapXY: {args.swap_xy}")
 
+    # Resolve backend from config if not set on CLI
+    if args.backend == 'axidraw' and loaded_general:
+        args.backend = loaded_general.get('backend', 'axidraw')
+
     # Initialize Driver
-    if args.mock:
-        print("INFO: Force Mock Mode selected.")
-        ad = MockAxiDraw()
-    elif axidraw is None:
-        print("WARNING: pyaxidraw not found. Falling back to MOCK Axidraw.")
-        ad = MockAxiDraw()
-    else:
-        print("INFO: Initializing REAL AxiDraw...")
-        ad = axidraw.AxiDraw()
+    ad = _create_backend(args, loaded_general)
 
     # Ensure Global Units are MM
     ad.options.units = 2
@@ -292,31 +319,32 @@ def main():
 
     print("INFO: Connection Successful.")
 
-    # Setup Options
-    print(f"INFO: Setting Pen Heights -> UP: {config.PEN_HEIGHTS['UP']}%, DOWN: {config.PEN_HEIGHTS['DOWN']}%")
-    ad.options.pen_pos_up = config.PEN_HEIGHTS["UP"]
-    ad.options.pen_pos_down = config.PEN_HEIGHTS["DOWN"]
+    # Setup Options (AxiDraw-specific: percentage-based speeds and pen heights)
+    if args.backend != 'gcode':
+        print(f"INFO: Setting Pen Heights -> UP: {config.PEN_HEIGHTS['UP']}%, DOWN: {config.PEN_HEIGHTS['DOWN']}%")
+        ad.options.pen_pos_up = config.PEN_HEIGHTS["UP"]
+        ad.options.pen_pos_down = config.PEN_HEIGHTS["DOWN"]
 
-    if args.pen_up is not None:
-        print(f"INFO: Overriding Pen Up -> {args.pen_up}%")
-        ad.options.pen_pos_up = args.pen_up
+        if args.pen_up is not None:
+            print(f"INFO: Overriding Pen Up -> {args.pen_up}%")
+            ad.options.pen_pos_up = args.pen_up
 
-    if args.pen_down is not None:
-        print(f"INFO: Overriding Pen Down -> {args.pen_down}%")
-        ad.options.pen_pos_down = args.pen_down
-    try:
-        ad.options.model = args.model
-    except Exception as e:
-        print(f"WARNING: Could not set model option: {e}")
+        if args.pen_down is not None:
+            print(f"INFO: Overriding Pen Down -> {args.pen_down}%")
+            ad.options.pen_pos_down = args.pen_down
+        try:
+            ad.options.model = args.model
+        except Exception as e:
+            print(f"WARNING: Could not set model option: {e}")
 
-    print(f"INFO: Setting Speeds -> Draw: {args.speed_down}%, Travel: {args.speed_up}%")
-    ad.options.speed_pendown = args.speed_down
-    ad.options.speed_penup = args.speed_up
+        print(f"INFO: Setting Speeds -> Draw: {args.speed_down}%, Travel: {args.speed_up}%")
+        ad.options.speed_pendown = args.speed_down
+        ad.options.speed_penup = args.speed_up
 
-    ad.options.units = 2
+        ad.options.units = 2
 
-    print("INFO: Updating AxiDraw options...")
-    ad.update()
+        print("INFO: Updating AxiDraw options...")
+        ad.update()
 
     print(f"DEBUG: ad.options.units is now {ad.options.units}")
 
@@ -440,8 +468,12 @@ def main():
         # Calculate Content Bounds & Offset if Alignment Requested
         offset_x = 0
         offset_y = 0
-        machine_w = 300.0 if args.model == 1 else 430.0
-        machine_h = 215.0 if args.model == 1 else 297.0
+        if args.backend == 'gcode' and hasattr(ad.options, 'machine_width'):
+            machine_w = args.machine_width or ad.options.machine_width
+            machine_h = args.machine_height or ad.options.machine_height
+        else:
+            machine_w = 300.0 if args.model == 1 else 430.0
+            machine_h = 215.0 if args.model == 1 else 297.0
 
         min_x, min_y, max_x, max_y, has_points = calculate_content_bounds(data['layers'])
 
