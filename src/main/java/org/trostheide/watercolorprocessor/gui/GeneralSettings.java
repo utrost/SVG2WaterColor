@@ -11,6 +11,7 @@ public class GeneralSettings {
     public boolean invertY;
     public boolean swapXY;
     public boolean visualMirror;
+    public String machineOrigin;
     public int speedDown;
     public int speedUp;
     public int penUp;
