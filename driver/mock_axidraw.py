@@ -1,7 +1,10 @@
-class AxiDraw:
+from backend import PlotterBackend, BackendOptions
+
+
+class AxiDraw(PlotterBackend):
     def __init__(self):
         self.connected = False
-        self.options = MockOptions()
+        self.options = BackendOptions()
 
     def interactive(self):
         print("[Mock] Entering Interactive Mode.")
@@ -12,7 +15,7 @@ class AxiDraw:
     def connect(self):
         print("[Mock] AxiDraw Connected.")
         self.connected = True
-        return True # Simulate successful connection
+        return True
 
     def disconnect(self):
         print("[Mock] AxiDraw Disconnected.")
@@ -38,12 +41,3 @@ class AxiDraw:
 
     def line(self, dx, dy):
         print(f"[Mock] Relative Line ({dx:.2f}, {dy:.2f}) [Pen DOWN]")
-
-class MockOptions:
-    def __init__(self):
-        self.speed_penup = 75
-        self.speed_pendown = 25
-        self.accel = 50
-        self.pen_pos_up = 60
-        self.pen_pos_down = 30
-        self.units = 0 # 0=inches, 1=cm, 2=mm
