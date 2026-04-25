@@ -19,12 +19,10 @@ public class SettingsPanel extends JPanel {
     private final JSpinner speedUpSpinner;
     private JSpinner zUpSpinner;
     private JSpinner zDownSpinner;
-    private final JCheckBox invertXCheckBox;
-    private final JCheckBox invertYCheckBox;
+    private final JComboBox<String> machineOriginCombo;
     private final JCheckBox swapXYCheckBox;
     private JRadioButton portraitRadio;
     private JRadioButton landscapeRadio;
-    private final JCheckBox visualMirrorCheckBox;
     private final JComboBox<String> modelComboBox;
     private final JCheckBox mockCheckBox;
     private final JComboBox<String> canvasAlignmentCombo;
@@ -281,11 +279,23 @@ public class SettingsPanel extends JPanel {
         c.anchor = GridBagConstraints.WEST;
         c.fill = GridBagConstraints.HORIZONTAL;
 
-        // Row 0: Flags
+        // Row 0: Machine Origin + Mock + Swap
         c.gridx = 0; c.gridy = 0; c.weightx = 0;
-        coordPanel.add(label("Axes"), c);
+        coordPanel.add(label("Machine Origin"), c);
 
-        c.gridx = 1; c.weightx = 1.0; c.gridwidth = 3;
+        c.gridx = 1; c.weightx = 0.3;
+        machineOriginCombo = new JComboBox<>(new String[] {
+                "Top-Left", "Top-Right", "Bottom-Left", "Bottom-Right"
+        });
+        machineOriginCombo.setSelectedItem("Top-Right");
+        machineOriginCombo.setToolTipText("Corner where the plotter's home position (0,0) is located");
+        machineOriginCombo.addActionListener(e -> {
+            if (manualSession != null) manualSession.resetServer();
+            fireVisualChange();
+        });
+        coordPanel.add(machineOriginCombo, c);
+
+        c.gridx = 2; c.weightx = 0; c.gridwidth = 2;
         JPanel flagsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
         flagsPanel.setOpaque(false);
 
@@ -293,33 +303,13 @@ public class SettingsPanel extends JPanel {
         mockCheckBox.setToolTipText("Simulate plotter without hardware");
         flagsPanel.add(mockCheckBox);
 
-        invertXCheckBox = new JCheckBox("Invert X");
-        invertXCheckBox.setToolTipText("Mirror the X axis for custom motor wiring");
-        invertXCheckBox.addActionListener(e -> {
-            if (manualSession != null) manualSession.resetServer();
-        });
-        flagsPanel.add(invertXCheckBox);
-
-        invertYCheckBox = new JCheckBox("Invert Y", false);
-        invertYCheckBox.setToolTipText("Mirror the Y axis for custom motor wiring");
-        invertYCheckBox.addActionListener(e -> {
-            if (manualSession != null) manualSession.resetServer();
-        });
-        flagsPanel.add(invertYCheckBox);
-
         swapXYCheckBox = new JCheckBox("Swap X/Y", true);
-        swapXYCheckBox.setToolTipText("Swap motor X and Y axes");
+        swapXYCheckBox.setToolTipText("Swap motor X and Y axes (when motor wiring is rotated 90 degrees)");
         swapXYCheckBox.addActionListener(e -> {
             if (manualSession != null) manualSession.resetServer();
             fireVisualChange();
         });
         flagsPanel.add(swapXYCheckBox);
-
-        JCheckBox visualMirrorCb = new JCheckBox("View: 0,0 Top-Right", true);
-        visualMirrorCb.setToolTipText("Display origin at top-right to match physical plotter");
-        visualMirrorCb.addActionListener(e -> fireVisualChange());
-        flagsPanel.add(visualMirrorCb);
-        this.visualMirrorCheckBox = visualMirrorCb;
 
         coordPanel.add(flagsPanel, c);
 
@@ -465,18 +455,18 @@ public class SettingsPanel extends JPanel {
         jogPanel.add(stepPanel, mgbc);
 
         // Direction Buttons
-        JButton btnUp = createJogButton("Up (-Y)");
-        JButton btnDown = createJogButton("Down (+Y)");
-        JButton btnLeft = createJogButton("Left (+X)");
-        JButton btnRight = createJogButton("Right (-X)");
+        JButton btnUp = createJogButton("Up");
+        JButton btnDown = createJogButton("Down");
+        JButton btnLeft = createJogButton("Left");
+        JButton btnRight = createJogButton("Right");
 
         java.awt.event.ActionListener moveAction = e -> {
             double step = (Double) stepSpinner.getValue();
             double dx = 0, dy = 0;
-            if (e.getSource() == btnUp) dy = -step;
-            else if (e.getSource() == btnDown) dy = step;
-            else if (e.getSource() == btnLeft) dx = step;
-            else if (e.getSource() == btnRight) dx = -step;
+            if (e.getSource() == btnUp) dy = isOriginBottom() ? step : -step;
+            else if (e.getSource() == btnDown) dy = isOriginBottom() ? -step : step;
+            else if (e.getSource() == btnLeft) dx = isOriginRight() ? step : -step;
+            else if (e.getSource() == btnRight) dx = isOriginRight() ? -step : step;
             runManualMove(dx, dy);
         };
 
@@ -520,22 +510,26 @@ public class SettingsPanel extends JPanel {
 
         am.put("moveUp", new AbstractAction() {
             public void actionPerformed(java.awt.event.ActionEvent e) {
-                runManualMove(0, -(Double) stepSpinner.getValue());
+                double s = (Double) stepSpinner.getValue();
+                runManualMove(0, isOriginBottom() ? s : -s);
             }
         });
         am.put("moveDown", new AbstractAction() {
             public void actionPerformed(java.awt.event.ActionEvent e) {
-                runManualMove(0, (Double) stepSpinner.getValue());
+                double s = (Double) stepSpinner.getValue();
+                runManualMove(0, isOriginBottom() ? -s : s);
             }
         });
         am.put("moveLeft", new AbstractAction() {
             public void actionPerformed(java.awt.event.ActionEvent e) {
-                runManualMove((Double) stepSpinner.getValue(), 0);
+                double s = (Double) stepSpinner.getValue();
+                runManualMove(isOriginRight() ? s : -s, 0);
             }
         });
         am.put("moveRight", new AbstractAction() {
             public void actionPerformed(java.awt.event.ActionEvent e) {
-                runManualMove(-(Double) stepSpinner.getValue(), 0);
+                double s = (Double) stepSpinner.getValue();
+                runManualMove(isOriginRight() ? -s : s, 0);
             }
         });
 
@@ -605,10 +599,12 @@ public class SettingsPanel extends JPanel {
     public int getPenUpHeight() { return (Integer) zUpSpinner.getValue(); }
     public int getPenDownHeight() { return (Integer) zDownSpinner.getValue(); }
     public boolean isMockMode() { return mockCheckBox.isSelected(); }
-    public boolean isInvertX() { return invertXCheckBox.isSelected(); }
-    public boolean isInvertY() { return invertYCheckBox.isSelected(); }
+    public String getMachineOrigin() { return (String) machineOriginCombo.getSelectedItem(); }
+    public boolean isInvertX() { return getMachineOrigin().contains("Right"); }
+    public boolean isInvertY() { return getMachineOrigin().contains("Bottom"); }
+    public boolean isOriginRight() { return getMachineOrigin().contains("Right"); }
+    public boolean isOriginBottom() { return getMachineOrigin().contains("Bottom"); }
     public boolean isSwapXY() { return swapXYCheckBox.isSelected(); }
-    public boolean isVisualMirror() { return visualMirrorCheckBox.isSelected(); }
     public String getCanvasAlignment() { return (String) canvasAlignmentCombo.getSelectedItem(); }
     public double getPaddingX() { return (Double) paddingXSpinner.getValue(); }
     public double getPaddingY() { return (Double) paddingYSpinner.getValue(); }
@@ -664,10 +660,8 @@ public class SettingsPanel extends JPanel {
         zUpSpinner.setEnabled(enabled);
         zDownSpinner.setEnabled(enabled);
         mockCheckBox.setEnabled(enabled);
-        invertXCheckBox.setEnabled(enabled);
-        invertYCheckBox.setEnabled(enabled);
+        machineOriginCombo.setEnabled(enabled);
         swapXYCheckBox.setEnabled(enabled);
-        visualMirrorCheckBox.setEnabled(enabled);
         serialPortField.setEnabled(enabled);
         baudRateCombo.setEnabled(enabled);
         penModeCombo.setEnabled(enabled);
@@ -754,10 +748,18 @@ public class SettingsPanel extends JPanel {
                 if (gen != null) {
                     modelComboBox.setSelectedIndex(gen.modelIndex);
                     mockCheckBox.setSelected(gen.mock);
-                    invertXCheckBox.setSelected(gen.invertX);
-                    invertYCheckBox.setSelected(gen.invertY);
                     swapXYCheckBox.setSelected(gen.swapXY);
-                    visualMirrorCheckBox.setSelected(gen.visualMirror);
+
+                    if (gen.machineOrigin != null) {
+                        machineOriginCombo.setSelectedItem(gen.machineOrigin);
+                    } else {
+                        String origin;
+                        if (gen.invertX && gen.invertY) origin = "Bottom-Right";
+                        else if (gen.invertX) origin = "Top-Right";
+                        else if (gen.invertY) origin = "Bottom-Left";
+                        else origin = "Top-Left";
+                        machineOriginCombo.setSelectedItem(origin);
+                    }
                     speedDownSpinner.setValue(gen.speedDown);
                     speedUpSpinner.setValue(gen.speedUp);
                     zUpSpinner.setValue(gen.penUp);
@@ -890,10 +892,11 @@ public class SettingsPanel extends JPanel {
             GeneralSettings gen = new GeneralSettings();
             gen.modelIndex = modelComboBox.getSelectedIndex();
             gen.mock = mockCheckBox.isSelected();
-            gen.invertX = invertXCheckBox.isSelected();
-            gen.invertY = invertYCheckBox.isSelected();
+            gen.machineOrigin = getMachineOrigin();
+            gen.invertX = isInvertX();
+            gen.invertY = isInvertY();
             gen.swapXY = swapXYCheckBox.isSelected();
-            gen.visualMirror = visualMirrorCheckBox.isSelected();
+            gen.visualMirror = false;
             gen.speedDown = (Integer) speedDownSpinner.getValue();
             gen.speedUp = (Integer) speedUpSpinner.getValue();
             gen.penUp = (Integer) zUpSpinner.getValue();
