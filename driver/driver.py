@@ -251,6 +251,8 @@ def main():
     parser.add_argument('--serial-port', help='Serial port for gcode backend')
     parser.add_argument('--machine-width', type=float, default=None, help='Machine width in mm (gcode)')
     parser.add_argument('--machine-height', type=float, default=None, help='Machine height in mm (gcode)')
+    parser.add_argument('--machine-origin', choices=['top-left', 'top-right', 'bottom-left', 'bottom-right'],
+                        help='Machine origin corner (derives --invert-x, --invert-y, --origin-right)')
 
     # Canvas Alignment Args
     parser.add_argument('--canvas-align', choices=['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center'],
@@ -281,11 +283,23 @@ def main():
     args.pen_up = resolve(args.pen_up, 'penUp', None)
     args.pen_down = resolve(args.pen_down, 'penDown', None)
 
+    # Resolve machine origin from CLI or config (derives invert/origin flags)
+    machine_origin = args.machine_origin
+    if not machine_origin and loaded_general:
+        mo = loaded_general.get('machineOrigin', '')
+        if mo:
+            machine_origin = mo.lower()
+    if machine_origin:
+        args.invert_x = 'right' in machine_origin
+        args.invert_y = 'bottom' in machine_origin
+        args.origin_right = 'right' in machine_origin
+
     # Boolean flags: CLI --flag is explicit True; config can set True; default is False
     if loaded_general:
         if not args.mock and loaded_general.get('mock', False): args.mock = True
-        if not args.invert_x and loaded_general.get('invertX', False): args.invert_x = True
-        if not args.invert_y and loaded_general.get('invertY', False): args.invert_y = True
+        if not machine_origin:
+            if not args.invert_x and loaded_general.get('invertX', False): args.invert_x = True
+            if not args.invert_y and loaded_general.get('invertY', False): args.invert_y = True
         if not args.swap_xy and loaded_general.get('swapXY', False): args.swap_xy = True
 
     print(f"INFO: Active Configuration -> Model: {args.model}, Mock: {args.mock}, InvertX: {args.invert_x}, InvertY: {args.invert_y}, SwapXY: {args.swap_xy}")
