@@ -1,42 +1,66 @@
 # Watercolor Processor - System Requirements
 
-This document outlines the core requirements and immutable physical constraints of the Watercolor Processor system. It serves as the single source of truth for system behavior.
+This document outlines the core requirements and physical constraints of the Watercolor Processor system.
 
-## 1. Hardware Constraints (Immutable)
-These properties describe the physical machine and cannot be changed by software.
+## 1. Hardware Constraints
 
-*   **Machine Size**: A3 Standard (~297mm width x 420mm height).
-*   **Physical Orientation**: **Portrait** (Vertical). The machine is taller than it is wide.
-*   **Physical Origin (Home)**: **Top Right Corner**. The machine reports `(0, 0)` when the head is at the top-right limit.
-*   **Axis Directions**:
-    *   **X-Axis**: Horizontal. Positive movement is **LEFT** (away from Origin).
-    *   **Y-Axis**: Vertical. Positive movement is **DOWN** (away from Origin).
-*   **Park Position**: Top Right `(0, 0)`.
+These properties describe the physical machine.
 
-## 2. Input Data Goals
-*   **Formats**: JSON (derived from SVG).
-*   **Input Coordinates**: Standard Canvas (Origin Top-Left, X Right, Y Down).
-*   **Variability**: Input files may be any size (A4, A3, etc.) and any orientation (Portrait, Landscape).
+- **Supported Backends**: AxiDraw (pyaxidraw) and G-code/GRBL (serial).
+- **Machine Size**: Configurable per backend. AxiDraw: A4 (model 1) or A3/XL (model 2). G-code: arbitrary dimensions via `machine_width`/`machine_height`.
+- **Physical Orientation**: Portrait (vertical) or Landscape, depending on plotter setup.
+- **Machine Origin (Home)**: Configurable. The motor (0,0) can be at any of the four corners: Top-Left, Top-Right, Bottom-Left, or Bottom-Right.
+- **Axis Directions**: Determined by the machine origin:
+  - Origin on the **right**: motor +X moves left (away from origin).
+  - Origin on the **left**: motor +X moves right (away from origin).
+  - Origin on the **top**: motor +Y moves down (away from origin).
+  - Origin on the **bottom**: motor +Y moves up (away from origin).
+- **Swap XY**: Orthogonal toggle for plotters whose motor axes are physically rotated 90 degrees relative to the bed.
+
+## 2. Input Data
+
+- **Formats**: JSON command files derived from SVG by the Java preprocessor.
+- **Input Coordinates**: Standard canvas convention (origin top-left, X right, Y down).
+- **Variability**: Input files may be any size (A4, A3, etc.) and any orientation.
 
 ## 3. Visualization Requirements
-The GUI "Live View" must act as a **Digital Twin** of the physical machine.
 
-*   **Orientation Accuracy**: The on-screen "Paper" must appear as Portrait (Vertical).
-*   **Origin Sync**: The visual `(0,0)` marker must appear at the **Top Right** of the screen rectangle, matching the physical machine.
-*   **Movement Sync**:
-    *   When the Driver reports `X` increasing, the visual marker must move **Left**.
-    *   When the Driver reports `Y` increasing, the visual marker must move **Down**.
-*   **WYSIWYG**: The drawing shown on screen must strictly match what will be drawn on paper. Using "Mirror View" or tricks that desynchronize the screen from the paper is discouraged unless strictly for debugging.
+The GUI Live View must act as a **Digital Twin** of the physical machine.
 
-## 4. Transformation Logic (Processing Pipeline)
-To map *Input Data* (Step 2) to *Hardware* (Step 1), the system must support:
+- **Origin Sync**: The visual (0,0) marker must appear at the correct screen corner matching the configured machine origin.
+- **Axis Indicators**: Arrows showing +X and +Y motor directions, rendered from the origin corner.
+- **Movement Sync**: When the driver reports position changes, the visual cursor must move in the physically correct direction for the configured origin.
+- **WYSIWYG**: The drawing shown on screen must match what will be drawn on paper, including alignment, rotation, and axis inversions.
+- **Alignment Preview**: Canvas alignment (top-left, top-right, bottom-left, bottom-right, center) must be accurately previewed with padding offsets.
 
-*   **Data Rotation**: The ability to visually rotate the *Drawing Content's Bounding Box* (e.g., by 90°) to accurately preview how a Landscape image maps onto the Portrait machine bed without altering the orientation of the raw SVG paths themselves.
-*   **Corner Alignment**: The ability to snap the drawing content (after rotation) to any of the four corners of the physical bed (e.g., "Align Top Right" = Snap Drawing Corner to Machine Origin).
-*   **Hardware Mapping**:
-    *   **Swap XY**: Option to treat Logic X as Physical Y (and vice-versa) for rotated mounting.
-    *   **Inversion**: Option to invert axis logic (0..Max vs Max..0) to match motor wiring.
+## 4. Transformation Logic
 
-## 5. Operational Requirements
-*   **Persistence**: All alignment, rotation, and flag settings must be saved to config and restored automatically on startup.
-*   **Startup State**: The application must launch in a "Ready" state with the visualization correctly representing the saved configuration immediately (no manual refresh needed).
+To map input data to hardware, the system applies transforms in this order:
+
+1. **Data Rotation**: Rotate drawing content (0/90/180/270 degrees) to preview how content maps onto the machine bed.
+2. **Swap XY**: Optionally treat logical X as physical Y (and vice versa) for rotated mounting.
+3. **Invert X**: Flip X axis when origin is on the right side.
+4. **Invert Y**: Flip Y axis when origin is on the bottom.
+5. **Alignment Offset**: Snap content to a corner or center of the machine bed with padding.
+
+The **Machine Origin** setting drives steps 3-4 automatically. Users select a corner; the system derives the correct inversions.
+
+## 5. Coordinate Mapping Model
+
+The Machine Origin replaces the old manual invertX/invertY checkboxes with a single intuitive control:
+
+| Machine Origin | invertX | invertY | origin_right |
+|---------------|---------|---------|-------------|
+| Top-Left | false | false | false |
+| Top-Right | true | false | true |
+| Bottom-Left | false | true | false |
+| Bottom-Right | true | true | true |
+
+This mapping is consistent across the Java GUI (SettingsPanel, VisualizationPanel) and the Python driver (transforms.py).
+
+## 6. Operational Requirements
+
+- **Persistence**: All settings (backend, origin, alignment, rotation, speeds, pen heights, stations, G-code parameters) are saved to `config.json` and restored on startup.
+- **Config Migration**: Old config files without `machineOrigin` are automatically migrated by inferring the origin from legacy `invertX`/`invertY` flags.
+- **Startup State**: The application launches in a ready state with the visualization correctly representing the saved configuration.
+- **Multi-Backend**: Switching between AxiDraw and G-code backends swaps the relevant settings panels and driver arguments without requiring restart.
