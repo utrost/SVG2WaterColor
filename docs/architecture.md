@@ -117,7 +117,7 @@ The driver uses a `PlotterBackend` abstract base class (`backend.py`) with three
 | Backend | Module | Communication | Use Case |
 |---------|--------|---------------|----------|
 | AxiDraw | `axidraw_backend.py` | pyaxidraw API | AxiDraw V3 (A4) and V3 XL (A3) |
-| G-code | `gcode_backend.py` | Serial (pyserial) | GRBL-compatible CNC/plotters |
+| G-code | `gcode_backend.py` | USB serial (pyserial) | GRBL-compatible CNC/plotters |
 | Mock | `mock_axidraw.py` | Console output | Testing and preview |
 
 All backends implement:

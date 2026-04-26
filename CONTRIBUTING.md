@@ -42,7 +42,7 @@ See [docs/architecture.md](docs/architecture.md) for the full system specificati
 | `transforms.py` | Coordinate transform pipeline (rotate, swap, invert) and alignment offset calculation |
 | `backend.py` | `PlotterBackend` abstract base class |
 | `axidraw_backend.py` | AxiDraw adapter (pyaxidraw API) |
-| `gcode_backend.py` | G-code/GRBL backend (serial communication) |
+| `gcode_backend.py` | G-code/GRBL backend (USB via pyserial) |
 | `mock_axidraw.py` | Simulation backend for testing |
 | `config.py` | Default station and pen configuration |
 

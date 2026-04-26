@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
-- **G-code/GRBL backend** -- Full support for GRBL-compatible plotters over serial (pyserial). Three pen control modes: Servo (M280), Z-Axis, and M3/M5 (spindle/solenoid). Configurable serial port, baud rate, feed rates, servo angles, Z positions, and machine dimensions.
+- **G-code/GRBL backend** -- Full support for GRBL-compatible plotters via USB (pyserial). Three pen control modes: Servo (M280), Z-Axis, and M3/M5 (spindle/solenoid). Configurable serial port, baud rate, feed rates, servo angles, Z positions, and machine dimensions.
 - **Backend abstraction** -- `PlotterBackend` ABC in `backend.py` with `AxiDrawBackend`, `GcodeBackend`, and `MockBackend` implementations. Backend factory in `driver.py`.
 - **Machine Origin setting** -- Single dropdown to configure plotter home corner (Top-Left, Top-Right, Bottom-Left, Bottom-Right). Replaces confusing manual invertX/invertY checkboxes. Automatically derives correct axis inversions and origin-right flag.
 - **`--machine-origin` CLI arg** -- Python driver accepts `--machine-origin {top-left,top-right,bottom-left,bottom-right}` to set origin from command line.

@@ -14,11 +14,11 @@ SVG (Inkscape layers) --> Java Processor --> commands.json --> Python Driver -->
 
 **Stage 1 -- Java Preprocessor:** Parses the SVG, identifies color layers (Inkscape layer names = paint station IDs), converts all primitives to paths, linearizes curves, segments strokes by paint capacity (`maxDrawDistance`), and inserts automatic refill commands.
 
-**Stage 2 -- Python Driver:** Reads the command JSON and drives the physical plotter via pyaxidraw or G-code serial. Handles pen up/down, refill dip sequences at configured station coordinates, inter-layer brush changes (with user prompts), and real-time position reporting.
+**Stage 2 -- Python Driver:** Reads the command JSON and drives the physical plotter via pyaxidraw or G-code over USB. Handles pen up/down, refill dip sequences at configured station coordinates, inter-layer brush changes (with user prompts), and real-time position reporting.
 
 ## Key Features
 
-- **Multi-Backend Support** -- AxiDraw (pyaxidraw API) and G-code (GRBL over serial) with a pluggable backend abstraction
+- **Multi-Backend Support** -- AxiDraw (pyaxidraw API) and G-code (GRBL via USB) with a pluggable backend abstraction
 - **Paint Capacity Management** -- Tracks brush ink distance, auto-inserts REFILL commands with calculated split points when strokes exceed capacity
 - **Multi-Layer / Multi-Color** -- SVG layers map to physical paint stations, each with configurable XY position and dip behavior
 - **Configurable Machine Origin** -- Supports plotters with home position at any corner (Top-Left, Top-Right, Bottom-Left, Bottom-Right); automatically derives axis inversion from origin selection
@@ -127,7 +127,7 @@ Configure hardware and calibration. Four sections:
 The default backend. Uses the pyaxidraw API to control AxiDraw V3 (A4) and V3 XL (A3) plotters. Pen height and speed are configured as percentages.
 
 ### G-code (GRBL)
-For GRBL-compatible CNC and plotter machines. Communicates over serial (pyserial). Supports three pen control modes:
+For GRBL-compatible CNC and plotter machines. Connects via USB (appears as a virtual serial port, driven by pyserial). Supports three pen control modes:
 
 | Mode | Commands | Use Case |
 |------|----------|----------|
@@ -328,7 +328,7 @@ SVG2WaterColor/
 ## Tech Stack
 
 - **Java 17** -- SVG processing (Apache Batik 1.17), JSON (Jackson 2.15), CLI (Commons CLI), GUI (Swing + FlatLaf 3.2)
-- **Python 3** -- Hardware driver, coordinate transforms, serial communication (pyserial)
+- **Python 3** -- Hardware driver, coordinate transforms, USB communication (pyserial)
 
 ## License
 
