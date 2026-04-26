@@ -1,0 +1,137 @@
+import time
+
+from backend import PlotterBackend, BackendOptions
+
+
+class GcodeOptions(BackendOptions):
+    def __init__(self):
+        super().__init__()
+        self.serial_port = "/dev/ttyUSB0"
+        self.baud_rate = 115200
+        self.pen_mode = "servo"
+        self.servo_pin = 0
+        self.feed_rate_draw = 1000
+        self.feed_rate_travel = 3000
+        self.pen_servo_up = 60
+        self.pen_servo_down = 30
+        self.z_up = 5.0
+        self.z_down = 0.0
+        self.machine_width = 300.0
+        self.machine_height = 200.0
+
+
+class GcodeBackend(PlotterBackend):
+    def __init__(self, gcode_config=None):
+        self.options = GcodeOptions()
+        if gcode_config:
+            self._apply_config(gcode_config)
+        self._serial = None
+        self._pen_is_down = False
+
+    def _apply_config(self, cfg):
+        for key in ('serial_port', 'baud_rate', 'pen_mode', 'servo_pin',
+                     'feed_rate_draw', 'feed_rate_travel',
+                     'pen_servo_up', 'pen_servo_down',
+                     'z_up', 'z_down', 'machine_width', 'machine_height'):
+            if key in cfg:
+                setattr(self.options, key, cfg[key])
+
+    def interactive(self):
+        pass
+
+    def update(self):
+        pass
+
+    def connect(self) -> bool:
+        try:
+            import serial
+            self._serial = serial.Serial(
+                self.options.serial_port,
+                self.options.baud_rate,
+                timeout=5
+            )
+            time.sleep(2)
+            self._serial.flushInput()
+            self._send("G21")
+            self._wait_for_ok()
+            self._send("G90")
+            self._wait_for_ok()
+            return True
+        except Exception as e:
+            print(f"ERROR: G-code connect failed: {e}")
+            return False
+
+    def disconnect(self):
+        if self._serial and self._serial.is_open:
+            self.penup()
+            self._send("G0 X0 Y0")
+            self._wait_for_ok()
+            self._serial.close()
+        self._serial = None
+
+    def moveto(self, x, y):
+        if self._pen_is_down:
+            self.penup()
+        feed = self.options.feed_rate_travel
+        self._send(f"G0 X{x:.3f} Y{y:.3f} F{feed}")
+        self._wait_for_ok()
+
+    def lineto(self, x, y):
+        if not self._pen_is_down:
+            self.pendown()
+        feed = self.options.feed_rate_draw
+        self._send(f"G1 X{x:.3f} Y{y:.3f} F{feed}")
+        self._wait_for_ok()
+
+    def move(self, dx, dy):
+        self._send("G91")
+        self._wait_for_ok()
+        feed = self.options.feed_rate_travel
+        self._send(f"G0 X{dx:.3f} Y{dy:.3f} F{feed}")
+        self._wait_for_ok()
+        self._send("G90")
+        self._wait_for_ok()
+
+    def penup(self):
+        self._pen_is_down = False
+        mode = self.options.pen_mode
+        if mode == "servo":
+            self._send(f"M280 P{self.options.servo_pin} S{self.options.pen_servo_up}")
+        elif mode == "zaxis":
+            self._send(f"G0 Z{self.options.z_up:.2f}")
+        elif mode == "m3m5":
+            self._send("M5")
+        self._wait_for_ok()
+
+    def pendown(self):
+        self._pen_is_down = True
+        mode = self.options.pen_mode
+        if mode == "servo":
+            self._send(f"M280 P{self.options.servo_pin} S{self.options.pen_servo_down}")
+        elif mode == "zaxis":
+            self._send(f"G1 Z{self.options.z_down:.2f} F{self.options.feed_rate_draw}")
+        elif mode == "m3m5":
+            self._send("M3")
+        self._wait_for_ok()
+        time.sleep(0.15)
+
+    def _send(self, cmd):
+        if self._serial and self._serial.is_open:
+            self._serial.write((cmd + "\n").encode())
+            self._serial.flush()
+
+    def _wait_for_ok(self, timeout=30):
+        if not self._serial:
+            return
+        start = time.time()
+        while time.time() - start < timeout:
+            if self._serial.in_waiting > 0:
+                line = self._serial.readline().decode(errors='replace').strip()
+                if line.lower().startswith("ok"):
+                    return
+                if line.lower().startswith("error"):
+                    print(f"WARNING: G-code error: {line}")
+                    return
+            else:
+                time.sleep(0.01)
+        print("WARNING: G-code response timeout")

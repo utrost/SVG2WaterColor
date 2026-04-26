@@ -19,18 +19,35 @@ public class SettingsPanel extends JPanel {
     private final JSpinner speedUpSpinner;
     private JSpinner zUpSpinner;
     private JSpinner zDownSpinner;
-    private final JCheckBox invertXCheckBox;
-    private final JCheckBox invertYCheckBox;
+    private final JComboBox<String> machineOriginCombo;
     private final JCheckBox swapXYCheckBox;
     private JRadioButton portraitRadio;
     private JRadioButton landscapeRadio;
-    private final JCheckBox visualMirrorCheckBox;
     private final JComboBox<String> modelComboBox;
     private final JCheckBox mockCheckBox;
     private final JComboBox<String> canvasAlignmentCombo;
     private final JComboBox<String> viewRotationCombo;
     private final JSpinner paddingXSpinner;
     private final JSpinner paddingYSpinner;
+
+    // Backend Selection
+    private final JComboBox<String> backendCombo;
+    private final JPanel axidrawSettingsPanel;
+    private final JPanel gcodeSettingsPanel;
+
+    // G-code specific fields
+    private final JTextField serialPortField;
+    private final JComboBox<String> baudRateCombo;
+    private final JComboBox<String> penModeCombo;
+    private final JSpinner servoPinSpinner;
+    private final JSpinner feedRateDrawSpinner;
+    private final JSpinner feedRateTravelSpinner;
+    private final JSpinner gcodeServoUpSpinner;
+    private final JSpinner gcodeServoDownSpinner;
+    private final JSpinner zUpPosSpinner;
+    private final JSpinner zDownPosSpinner;
+    private final JSpinner gcodeWidthSpinner;
+    private final JSpinner gcodeHeightSpinner;
 
     // Station Editor Components
     private final JTable stationTable;
@@ -83,29 +100,17 @@ public class SettingsPanel extends JPanel {
         mainContent.setLayout(new BoxLayout(mainContent, BoxLayout.Y_AXIS));
 
         // --- Section 1: Hardware Settings ---
-        JPanel hardwarePanel = new JPanel(new GridBagLayout());
+        JPanel hardwarePanel = new JPanel(new BorderLayout(0, 4));
         hardwarePanel.setBorder(createSection("Hardware"));
-        GridBagConstraints g = new GridBagConstraints();
-        g.insets = new Insets(4, 8, 4, 8);
-        g.anchor = GridBagConstraints.WEST;
-        g.fill = GridBagConstraints.HORIZONTAL;
 
-        // Row 0: Plotter Size + Orientation
-        g.gridx = 0; g.gridy = 0; g.weightx = 0;
-        hardwarePanel.add(label("Plotter Size"), g);
+        // Backend selector row
+        JPanel backendRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        backendRow.setOpaque(false);
+        backendRow.add(label("Backend"));
+        backendCombo = new JComboBox<>(new String[] { "AxiDraw", "G-code (GRBL)" });
+        backendCombo.setToolTipText("Select your plotter type");
+        backendRow.add(backendCombo);
 
-        g.gridx = 1; g.weightx = 0.3;
-        modelComboBox = new JComboBox<>(new String[] { "Standard (A4 / V3)", "Large (A3 / V3 XL)" });
-        modelComboBox.setSelectedIndex(1);
-        modelComboBox.setToolTipText("Select your AxiDraw model");
-        hardwarePanel.add(modelComboBox, g);
-
-        g.gridx = 2; g.weightx = 0;
-        hardwarePanel.add(label("Orientation"), g);
-
-        g.gridx = 3; g.weightx = 0.3;
-        JPanel orientPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-        orientPanel.setOpaque(false);
         landscapeRadio = new JRadioButton("Landscape");
         portraitRadio = new JRadioButton("Portrait");
         ButtonGroup orientationGroup = new ButtonGroup();
@@ -114,43 +119,154 @@ public class SettingsPanel extends JPanel {
         portraitRadio.setSelected(true);
         landscapeRadio.addActionListener(e -> fireVisualChange());
         portraitRadio.addActionListener(e -> fireVisualChange());
-        orientPanel.add(portraitRadio);
-        orientPanel.add(landscapeRadio);
-        hardwarePanel.add(orientPanel, g);
+        backendRow.add(Box.createHorizontalStrut(12));
+        backendRow.add(label("Orientation"));
+        backendRow.add(portraitRadio);
+        backendRow.add(landscapeRadio);
 
-        // Row 1: Speeds
-        g.gridx = 0; g.gridy = 1; g.weightx = 0;
-        hardwarePanel.add(label("Draw Speed (%)"), g);
+        hardwarePanel.add(backendRow, BorderLayout.NORTH);
 
+        // -- AxiDraw settings (shown when backend=AxiDraw) --
+        axidrawSettingsPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints g = new GridBagConstraints();
+        g.insets = new Insets(4, 8, 4, 8);
+        g.anchor = GridBagConstraints.WEST;
+        g.fill = GridBagConstraints.HORIZONTAL;
+
+        g.gridx = 0; g.gridy = 0; g.weightx = 0;
+        axidrawSettingsPanel.add(label("Plotter Size"), g);
         g.gridx = 1; g.weightx = 0.3;
+        modelComboBox = new JComboBox<>(new String[] { "Standard (A4 / V3)", "Large (A3 / V3 XL)" });
+        modelComboBox.setSelectedIndex(1);
+        modelComboBox.setToolTipText("Select your AxiDraw model");
+        axidrawSettingsPanel.add(modelComboBox, g);
+
+        g.gridx = 2; g.weightx = 0;
+        axidrawSettingsPanel.add(label("Draw Speed (%)"), g);
+        g.gridx = 3; g.weightx = 0.3;
         speedDownSpinner = new JSpinner(new SpinnerNumberModel(25, 1, 100, 1));
         speedDownSpinner.setToolTipText("Pen-down drawing speed as percentage of maximum");
-        hardwarePanel.add(speedDownSpinner, g);
+        axidrawSettingsPanel.add(speedDownSpinner, g);
 
-        g.gridx = 2; g.weightx = 0;
-        hardwarePanel.add(label("Travel Speed (%)"), g);
-
-        g.gridx = 3; g.weightx = 0.3;
+        g.gridx = 0; g.gridy = 1; g.weightx = 0;
+        axidrawSettingsPanel.add(label("Travel Speed (%)"), g);
+        g.gridx = 1; g.weightx = 0.3;
         speedUpSpinner = new JSpinner(new SpinnerNumberModel(75, 1, 100, 1));
         speedUpSpinner.setToolTipText("Pen-up travel speed as percentage of maximum");
-        hardwarePanel.add(speedUpSpinner, g);
-
-        // Row 2: Pen Heights
-        g.gridx = 0; g.gridy = 2; g.weightx = 0;
-        hardwarePanel.add(label("Pen Up (%)"), g);
-
-        g.gridx = 1; g.weightx = 0.3;
-        zUpSpinner = new JSpinner(new SpinnerNumberModel(60, 0, 100, 1));
-        zUpSpinner.setToolTipText("Servo position when pen is raised");
-        hardwarePanel.add(zUpSpinner, g);
+        axidrawSettingsPanel.add(speedUpSpinner, g);
 
         g.gridx = 2; g.weightx = 0;
-        hardwarePanel.add(label("Pen Down (%)"), g);
-
+        axidrawSettingsPanel.add(label("Pen Up (%)"), g);
         g.gridx = 3; g.weightx = 0.3;
+        zUpSpinner = new JSpinner(new SpinnerNumberModel(60, 0, 100, 1));
+        zUpSpinner.setToolTipText("Servo position when pen is raised");
+        axidrawSettingsPanel.add(zUpSpinner, g);
+
+        g.gridx = 0; g.gridy = 2; g.weightx = 0;
+        axidrawSettingsPanel.add(label("Pen Down (%)"), g);
+        g.gridx = 1; g.weightx = 0.3;
         zDownSpinner = new JSpinner(new SpinnerNumberModel(30, 0, 100, 1));
         zDownSpinner.setToolTipText("Servo position when pen is lowered");
-        hardwarePanel.add(zDownSpinner, g);
+        axidrawSettingsPanel.add(zDownSpinner, g);
+
+        // -- G-code settings (shown when backend=G-code) --
+        gcodeSettingsPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints gc = new GridBagConstraints();
+        gc.insets = new Insets(4, 8, 4, 8);
+        gc.anchor = GridBagConstraints.WEST;
+        gc.fill = GridBagConstraints.HORIZONTAL;
+
+        gc.gridx = 0; gc.gridy = 0; gc.weightx = 0;
+        gcodeSettingsPanel.add(label("Serial Port"), gc);
+        gc.gridx = 1; gc.weightx = 0.3;
+        String defaultPort = System.getProperty("os.name").toLowerCase().contains("win") ? "COM3" : "/dev/ttyUSB0";
+        serialPortField = new JTextField(defaultPort, 12);
+        serialPortField.setToolTipText("Serial port for the GRBL controller");
+        gcodeSettingsPanel.add(serialPortField, gc);
+
+        gc.gridx = 2; gc.weightx = 0;
+        gcodeSettingsPanel.add(label("Baud Rate"), gc);
+        gc.gridx = 3; gc.weightx = 0.3;
+        baudRateCombo = new JComboBox<>(new String[] { "9600", "115200", "250000" });
+        baudRateCombo.setSelectedItem("115200");
+        gcodeSettingsPanel.add(baudRateCombo, gc);
+
+        gc.gridx = 0; gc.gridy = 1; gc.weightx = 0;
+        gcodeSettingsPanel.add(label("Pen Mode"), gc);
+        gc.gridx = 1; gc.weightx = 0.3;
+        penModeCombo = new JComboBox<>(new String[] { "Servo (M280)", "Z-Axis", "M3/M5" });
+        penModeCombo.setToolTipText("How pen up/down is controlled");
+        gcodeSettingsPanel.add(penModeCombo, gc);
+
+        gc.gridx = 2; gc.weightx = 0;
+        gcodeSettingsPanel.add(label("Servo Pin"), gc);
+        gc.gridx = 3; gc.weightx = 0.3;
+        servoPinSpinner = new JSpinner(new SpinnerNumberModel(0, 0, 10, 1));
+        gcodeSettingsPanel.add(servoPinSpinner, gc);
+
+        gc.gridx = 0; gc.gridy = 2; gc.weightx = 0;
+        gcodeSettingsPanel.add(label("Draw Feed (mm/min)"), gc);
+        gc.gridx = 1; gc.weightx = 0.3;
+        feedRateDrawSpinner = new JSpinner(new SpinnerNumberModel(1000, 50, 10000, 50));
+        gcodeSettingsPanel.add(feedRateDrawSpinner, gc);
+
+        gc.gridx = 2; gc.weightx = 0;
+        gcodeSettingsPanel.add(label("Travel Feed (mm/min)"), gc);
+        gc.gridx = 3; gc.weightx = 0.3;
+        feedRateTravelSpinner = new JSpinner(new SpinnerNumberModel(3000, 50, 10000, 100));
+        gcodeSettingsPanel.add(feedRateTravelSpinner, gc);
+
+        gc.gridx = 0; gc.gridy = 3; gc.weightx = 0;
+        gcodeSettingsPanel.add(label("Servo/Z Up"), gc);
+        gc.gridx = 1; gc.weightx = 0.3;
+        gcodeServoUpSpinner = new JSpinner(new SpinnerNumberModel(60, 0, 180, 1));
+        gcodeServoUpSpinner.setToolTipText("Servo angle or Z height for pen up");
+        gcodeSettingsPanel.add(gcodeServoUpSpinner, gc);
+
+        gc.gridx = 2; gc.weightx = 0;
+        gcodeSettingsPanel.add(label("Servo/Z Down"), gc);
+        gc.gridx = 3; gc.weightx = 0.3;
+        gcodeServoDownSpinner = new JSpinner(new SpinnerNumberModel(30, 0, 180, 1));
+        gcodeServoDownSpinner.setToolTipText("Servo angle or Z height for pen down");
+        gcodeSettingsPanel.add(gcodeServoDownSpinner, gc);
+
+        gc.gridx = 0; gc.gridy = 4; gc.weightx = 0;
+        gcodeSettingsPanel.add(label("Z Up (mm)"), gc);
+        gc.gridx = 1; gc.weightx = 0.3;
+        zUpPosSpinner = new JSpinner(new SpinnerNumberModel(5.0, 0.0, 100.0, 0.5));
+        gcodeSettingsPanel.add(zUpPosSpinner, gc);
+
+        gc.gridx = 2; gc.weightx = 0;
+        gcodeSettingsPanel.add(label("Z Down (mm)"), gc);
+        gc.gridx = 3; gc.weightx = 0.3;
+        zDownPosSpinner = new JSpinner(new SpinnerNumberModel(0.0, -10.0, 100.0, 0.5));
+        gcodeSettingsPanel.add(zDownPosSpinner, gc);
+
+        gc.gridx = 0; gc.gridy = 5; gc.weightx = 0;
+        gcodeSettingsPanel.add(label("Machine Width (mm)"), gc);
+        gc.gridx = 1; gc.weightx = 0.3;
+        gcodeWidthSpinner = new JSpinner(new SpinnerNumberModel(300.0, 10.0, 2000.0, 10.0));
+        gcodeWidthSpinner.addChangeListener(e -> fireVisualChange());
+        gcodeSettingsPanel.add(gcodeWidthSpinner, gc);
+
+        gc.gridx = 2; gc.weightx = 0;
+        gcodeSettingsPanel.add(label("Machine Height (mm)"), gc);
+        gc.gridx = 3; gc.weightx = 0.3;
+        gcodeHeightSpinner = new JSpinner(new SpinnerNumberModel(200.0, 10.0, 2000.0, 10.0));
+        gcodeHeightSpinner.addChangeListener(e -> fireVisualChange());
+        gcodeSettingsPanel.add(gcodeHeightSpinner, gc);
+
+        // CardLayout to swap AxiDraw / G-code panels
+        JPanel cardPanel = new JPanel(new CardLayout());
+        cardPanel.add(axidrawSettingsPanel, "axidraw");
+        cardPanel.add(gcodeSettingsPanel, "gcode");
+        hardwarePanel.add(cardPanel, BorderLayout.CENTER);
+
+        backendCombo.addActionListener(e -> {
+            CardLayout cl = (CardLayout) cardPanel.getLayout();
+            cl.show(cardPanel, backendCombo.getSelectedIndex() == 0 ? "axidraw" : "gcode");
+            fireVisualChange();
+        });
 
         mainContent.add(hardwarePanel);
         mainContent.add(Box.createVerticalStrut(4));
@@ -163,11 +279,23 @@ public class SettingsPanel extends JPanel {
         c.anchor = GridBagConstraints.WEST;
         c.fill = GridBagConstraints.HORIZONTAL;
 
-        // Row 0: Flags
+        // Row 0: Machine Origin + Mock + Swap
         c.gridx = 0; c.gridy = 0; c.weightx = 0;
-        coordPanel.add(label("Axes"), c);
+        coordPanel.add(label("Machine Origin"), c);
 
-        c.gridx = 1; c.weightx = 1.0; c.gridwidth = 3;
+        c.gridx = 1; c.weightx = 0.3;
+        machineOriginCombo = new JComboBox<>(new String[] {
+                "Top-Left", "Top-Right", "Bottom-Left", "Bottom-Right"
+        });
+        machineOriginCombo.setSelectedItem("Top-Right");
+        machineOriginCombo.setToolTipText("Corner where the plotter's home position (0,0) is located");
+        machineOriginCombo.addActionListener(e -> {
+            if (manualSession != null) manualSession.resetServer();
+            fireVisualChange();
+        });
+        coordPanel.add(machineOriginCombo, c);
+
+        c.gridx = 2; c.weightx = 0; c.gridwidth = 2;
         JPanel flagsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
         flagsPanel.setOpaque(false);
 
@@ -175,33 +303,13 @@ public class SettingsPanel extends JPanel {
         mockCheckBox.setToolTipText("Simulate plotter without hardware");
         flagsPanel.add(mockCheckBox);
 
-        invertXCheckBox = new JCheckBox("Invert X");
-        invertXCheckBox.setToolTipText("Mirror the X axis for custom motor wiring");
-        invertXCheckBox.addActionListener(e -> {
-            if (manualSession != null) manualSession.resetServer();
-        });
-        flagsPanel.add(invertXCheckBox);
-
-        invertYCheckBox = new JCheckBox("Invert Y", false);
-        invertYCheckBox.setToolTipText("Mirror the Y axis for custom motor wiring");
-        invertYCheckBox.addActionListener(e -> {
-            if (manualSession != null) manualSession.resetServer();
-        });
-        flagsPanel.add(invertYCheckBox);
-
         swapXYCheckBox = new JCheckBox("Swap X/Y", true);
-        swapXYCheckBox.setToolTipText("Swap motor X and Y axes");
+        swapXYCheckBox.setToolTipText("Swap motor X and Y axes (when motor wiring is rotated 90 degrees)");
         swapXYCheckBox.addActionListener(e -> {
             if (manualSession != null) manualSession.resetServer();
             fireVisualChange();
         });
         flagsPanel.add(swapXYCheckBox);
-
-        JCheckBox visualMirrorCb = new JCheckBox("View: 0,0 Top-Right", true);
-        visualMirrorCb.setToolTipText("Display origin at top-right to match physical plotter");
-        visualMirrorCb.addActionListener(e -> fireVisualChange());
-        flagsPanel.add(visualMirrorCb);
-        this.visualMirrorCheckBox = visualMirrorCb;
 
         coordPanel.add(flagsPanel, c);
 
@@ -347,18 +455,18 @@ public class SettingsPanel extends JPanel {
         jogPanel.add(stepPanel, mgbc);
 
         // Direction Buttons
-        JButton btnUp = createJogButton("Up (-Y)");
-        JButton btnDown = createJogButton("Down (+Y)");
-        JButton btnLeft = createJogButton("Left (+X)");
-        JButton btnRight = createJogButton("Right (-X)");
+        JButton btnUp = createJogButton("Up");
+        JButton btnDown = createJogButton("Down");
+        JButton btnLeft = createJogButton("Left");
+        JButton btnRight = createJogButton("Right");
 
         java.awt.event.ActionListener moveAction = e -> {
             double step = (Double) stepSpinner.getValue();
             double dx = 0, dy = 0;
-            if (e.getSource() == btnUp) dy = -step;
-            else if (e.getSource() == btnDown) dy = step;
-            else if (e.getSource() == btnLeft) dx = step;
-            else if (e.getSource() == btnRight) dx = -step;
+            if (e.getSource() == btnUp) dy = isOriginBottom() ? step : -step;
+            else if (e.getSource() == btnDown) dy = isOriginBottom() ? -step : step;
+            else if (e.getSource() == btnLeft) dx = isOriginRight() ? step : -step;
+            else if (e.getSource() == btnRight) dx = isOriginRight() ? -step : step;
             runManualMove(dx, dy);
         };
 
@@ -402,22 +510,26 @@ public class SettingsPanel extends JPanel {
 
         am.put("moveUp", new AbstractAction() {
             public void actionPerformed(java.awt.event.ActionEvent e) {
-                runManualMove(0, -(Double) stepSpinner.getValue());
+                double s = (Double) stepSpinner.getValue();
+                runManualMove(0, isOriginBottom() ? s : -s);
             }
         });
         am.put("moveDown", new AbstractAction() {
             public void actionPerformed(java.awt.event.ActionEvent e) {
-                runManualMove(0, (Double) stepSpinner.getValue());
+                double s = (Double) stepSpinner.getValue();
+                runManualMove(0, isOriginBottom() ? -s : s);
             }
         });
         am.put("moveLeft", new AbstractAction() {
             public void actionPerformed(java.awt.event.ActionEvent e) {
-                runManualMove((Double) stepSpinner.getValue(), 0);
+                double s = (Double) stepSpinner.getValue();
+                runManualMove(isOriginRight() ? s : -s, 0);
             }
         });
         am.put("moveRight", new AbstractAction() {
             public void actionPerformed(java.awt.event.ActionEvent e) {
-                runManualMove(-(Double) stepSpinner.getValue(), 0);
+                double s = (Double) stepSpinner.getValue();
+                runManualMove(isOriginRight() ? -s : s, 0);
             }
         });
 
@@ -480,16 +592,19 @@ public class SettingsPanel extends JPanel {
     }
 
     // --- Public Accessors for PlotterPanel ---
+    public String getBackend() { return backendCombo.getSelectedIndex() == 0 ? "axidraw" : "gcode"; }
     public int getDrawSpeed() { return (Integer) speedDownSpinner.getValue(); }
     public int getTravelSpeed() { return (Integer) speedUpSpinner.getValue(); }
     public int getPlotterModelIndex() { return modelComboBox.getSelectedIndex(); }
     public int getPenUpHeight() { return (Integer) zUpSpinner.getValue(); }
     public int getPenDownHeight() { return (Integer) zDownSpinner.getValue(); }
     public boolean isMockMode() { return mockCheckBox.isSelected(); }
-    public boolean isInvertX() { return invertXCheckBox.isSelected(); }
-    public boolean isInvertY() { return invertYCheckBox.isSelected(); }
+    public String getMachineOrigin() { return (String) machineOriginCombo.getSelectedItem(); }
+    public boolean isInvertX() { return getMachineOrigin().contains("Right"); }
+    public boolean isInvertY() { return getMachineOrigin().contains("Bottom"); }
+    public boolean isOriginRight() { return getMachineOrigin().contains("Right"); }
+    public boolean isOriginBottom() { return getMachineOrigin().contains("Bottom"); }
     public boolean isSwapXY() { return swapXYCheckBox.isSelected(); }
-    public boolean isVisualMirror() { return visualMirrorCheckBox.isSelected(); }
     public String getCanvasAlignment() { return (String) canvasAlignmentCombo.getSelectedItem(); }
     public double getPaddingX() { return (Double) paddingXSpinner.getValue(); }
     public double getPaddingY() { return (Double) paddingYSpinner.getValue(); }
@@ -509,6 +624,9 @@ public class SettingsPanel extends JPanel {
     }
 
     public double getMachineWidth() {
+        if ("gcode".equals(getBackend())) {
+            return (Double) gcodeWidthSpinner.getValue();
+        }
         boolean isPortrait = portraitRadio != null && portraitRadio.isSelected();
         double w;
         if (getPlotterModelIndex() == 0)
@@ -524,6 +642,9 @@ public class SettingsPanel extends JPanel {
     }
 
     public double getMachineHeight() {
+        if ("gcode".equals(getBackend())) {
+            return (Double) gcodeHeightSpinner.getValue();
+        }
         boolean isPortrait = portraitRadio != null && portraitRadio.isSelected();
         if (isPortrait) {
             return (getPlotterModelIndex() == 0) ? 297 : 430;
@@ -532,16 +653,27 @@ public class SettingsPanel extends JPanel {
     }
 
     public void setSettingsEnabled(boolean enabled) {
+        backendCombo.setEnabled(enabled);
         modelComboBox.setEnabled(enabled);
         speedDownSpinner.setEnabled(enabled);
         speedUpSpinner.setEnabled(enabled);
         zUpSpinner.setEnabled(enabled);
         zDownSpinner.setEnabled(enabled);
         mockCheckBox.setEnabled(enabled);
-        invertXCheckBox.setEnabled(enabled);
-        invertYCheckBox.setEnabled(enabled);
+        machineOriginCombo.setEnabled(enabled);
         swapXYCheckBox.setEnabled(enabled);
-        visualMirrorCheckBox.setEnabled(enabled);
+        serialPortField.setEnabled(enabled);
+        baudRateCombo.setEnabled(enabled);
+        penModeCombo.setEnabled(enabled);
+        servoPinSpinner.setEnabled(enabled);
+        feedRateDrawSpinner.setEnabled(enabled);
+        feedRateTravelSpinner.setEnabled(enabled);
+        gcodeServoUpSpinner.setEnabled(enabled);
+        gcodeServoDownSpinner.setEnabled(enabled);
+        zUpPosSpinner.setEnabled(enabled);
+        zDownPosSpinner.setEnabled(enabled);
+        gcodeWidthSpinner.setEnabled(enabled);
+        gcodeHeightSpinner.setEnabled(enabled);
         stationTable.setEnabled(enabled);
         idField.setEnabled(enabled);
         xSpinner.setEnabled(enabled);
@@ -616,10 +748,18 @@ public class SettingsPanel extends JPanel {
                 if (gen != null) {
                     modelComboBox.setSelectedIndex(gen.modelIndex);
                     mockCheckBox.setSelected(gen.mock);
-                    invertXCheckBox.setSelected(gen.invertX);
-                    invertYCheckBox.setSelected(gen.invertY);
                     swapXYCheckBox.setSelected(gen.swapXY);
-                    visualMirrorCheckBox.setSelected(gen.visualMirror);
+
+                    if (gen.machineOrigin != null) {
+                        machineOriginCombo.setSelectedItem(gen.machineOrigin);
+                    } else {
+                        String origin;
+                        if (gen.invertX && gen.invertY) origin = "Bottom-Right";
+                        else if (gen.invertX) origin = "Top-Right";
+                        else if (gen.invertY) origin = "Bottom-Left";
+                        else origin = "Top-Left";
+                        machineOriginCombo.setSelectedItem(origin);
+                    }
                     speedDownSpinner.setValue(gen.speedDown);
                     speedUpSpinner.setValue(gen.speedUp);
                     zUpSpinner.setValue(gen.penUp);
@@ -641,6 +781,30 @@ public class SettingsPanel extends JPanel {
 
                     paddingXSpinner.setValue(gen.paddingX);
                     paddingYSpinner.setValue(gen.paddingY);
+
+                    if ("gcode".equals(gen.backend)) {
+                        backendCombo.setSelectedIndex(1);
+                    } else {
+                        backendCombo.setSelectedIndex(0);
+                    }
+
+                    if (gen.gcode != null) {
+                        GcodeSettings gc = gen.gcode;
+                        serialPortField.setText(gc.serial_port != null ? gc.serial_port : "/dev/ttyUSB0");
+                        baudRateCombo.setSelectedItem(String.valueOf(gc.baud_rate));
+                        if ("zaxis".equals(gc.pen_mode)) penModeCombo.setSelectedIndex(1);
+                        else if ("m3m5".equals(gc.pen_mode)) penModeCombo.setSelectedIndex(2);
+                        else penModeCombo.setSelectedIndex(0);
+                        servoPinSpinner.setValue(gc.servo_pin);
+                        feedRateDrawSpinner.setValue(gc.feed_rate_draw);
+                        feedRateTravelSpinner.setValue(gc.feed_rate_travel);
+                        gcodeServoUpSpinner.setValue(gc.pen_servo_up);
+                        gcodeServoDownSpinner.setValue(gc.pen_servo_down);
+                        zUpPosSpinner.setValue(gc.z_up);
+                        zDownPosSpinner.setValue(gc.z_down);
+                        gcodeWidthSpinner.setValue(gc.machine_width);
+                        gcodeHeightSpinner.setValue(gc.machine_height);
+                    }
                 }
 
                 stations.clear();
@@ -728,10 +892,11 @@ public class SettingsPanel extends JPanel {
             GeneralSettings gen = new GeneralSettings();
             gen.modelIndex = modelComboBox.getSelectedIndex();
             gen.mock = mockCheckBox.isSelected();
-            gen.invertX = invertXCheckBox.isSelected();
-            gen.invertY = invertYCheckBox.isSelected();
+            gen.machineOrigin = getMachineOrigin();
+            gen.invertX = isInvertX();
+            gen.invertY = isInvertY();
             gen.swapXY = swapXYCheckBox.isSelected();
-            gen.visualMirror = visualMirrorCheckBox.isSelected();
+            gen.visualMirror = false;
             gen.speedDown = (Integer) speedDownSpinner.getValue();
             gen.speedUp = (Integer) speedUpSpinner.getValue();
             gen.penUp = (Integer) zUpSpinner.getValue();
@@ -741,6 +906,25 @@ public class SettingsPanel extends JPanel {
             gen.viewRotation = getViewRotation();
             gen.paddingX = getPaddingX();
             gen.paddingY = getPaddingY();
+            gen.backend = getBackend();
+
+            if ("gcode".equals(gen.backend)) {
+                GcodeSettings gc = new GcodeSettings();
+                gc.serial_port = serialPortField.getText().trim();
+                gc.baud_rate = Integer.parseInt((String) baudRateCombo.getSelectedItem());
+                int pmIdx = penModeCombo.getSelectedIndex();
+                gc.pen_mode = pmIdx == 0 ? "servo" : pmIdx == 1 ? "zaxis" : "m3m5";
+                gc.servo_pin = (Integer) servoPinSpinner.getValue();
+                gc.feed_rate_draw = (Integer) feedRateDrawSpinner.getValue();
+                gc.feed_rate_travel = (Integer) feedRateTravelSpinner.getValue();
+                gc.pen_servo_up = (Integer) gcodeServoUpSpinner.getValue();
+                gc.pen_servo_down = (Integer) gcodeServoDownSpinner.getValue();
+                gc.z_up = (Double) zUpPosSpinner.getValue();
+                gc.z_down = (Double) zDownPosSpinner.getValue();
+                gc.machine_width = (Double) gcodeWidthSpinner.getValue();
+                gc.machine_height = (Double) gcodeHeightSpinner.getValue();
+                gen.gcode = gc;
+            }
 
             AppConfig config = new AppConfig(gen, new LinkedHashMap<>(stations));
 

@@ -205,6 +205,13 @@ public class PlotterPanel extends JPanel {
         cmd.add("driver/driver.py");
         cmd.add(jsonFile.getAbsolutePath());
 
+        boolean isGcode = "gcode".equals(settingsPanel.getBackend());
+
+        if (isGcode) {
+            cmd.add("--backend");
+            cmd.add("gcode");
+        }
+
         if (settingsPanel.isMockMode()) {
             cmd.add("--mock");
         }
@@ -223,18 +230,20 @@ public class PlotterPanel extends JPanel {
             cmd.add("--verbose");
         }
 
-        cmd.add("--model");
-        cmd.add(String.valueOf(settingsPanel.getPlotterModelIndex() + 1));
+        if (!isGcode) {
+            cmd.add("--model");
+            cmd.add(String.valueOf(settingsPanel.getPlotterModelIndex() + 1));
 
-        cmd.add("--speed-down");
-        cmd.add(String.valueOf(settingsPanel.getDrawSpeed()));
-        cmd.add("--speed-up");
-        cmd.add(String.valueOf(settingsPanel.getTravelSpeed()));
+            cmd.add("--speed-down");
+            cmd.add(String.valueOf(settingsPanel.getDrawSpeed()));
+            cmd.add("--speed-up");
+            cmd.add(String.valueOf(settingsPanel.getTravelSpeed()));
 
-        cmd.add("--pen-up");
-        cmd.add(String.valueOf(settingsPanel.getPenUpHeight()));
-        cmd.add("--pen-down");
-        cmd.add(String.valueOf(settingsPanel.getPenDownHeight()));
+            cmd.add("--pen-up");
+            cmd.add(String.valueOf(settingsPanel.getPenUpHeight()));
+            cmd.add("--pen-down");
+            cmd.add(String.valueOf(settingsPanel.getPenDownHeight()));
+        }
 
         String alignment = settingsPanel.getCanvasAlignment();
         if (alignment != null && !alignment.isEmpty()) {
@@ -247,7 +256,9 @@ public class PlotterPanel extends JPanel {
         cmd.add("--padding-y");
         cmd.add(String.valueOf(settingsPanel.getPaddingY()));
 
-        cmd.add("--origin-right");
+        if (settingsPanel.isOriginRight()) {
+            cmd.add("--origin-right");
+        }
 
         int rotation = settingsPanel.getViewRotation();
         if (rotation != 0) {
@@ -367,6 +378,12 @@ public class PlotterPanel extends JPanel {
             cmd.add(pythonPathField.getText());
             cmd.add("driver/driver.py");
             cmd.add("--interactive-server");
+
+            if ("gcode".equals(settingsPanel.getBackend())) {
+                cmd.add("--backend");
+                cmd.add("gcode");
+            }
+
             if (settingsPanel.isMockMode())
                 cmd.add("--mock");
             if (verboseCheckBox.isSelected())
@@ -427,6 +444,7 @@ public class PlotterPanel extends JPanel {
     private void updateVisualSettings() {
         appendToConsole("[DEBUG] Visual Settings Update: Align=" + settingsPanel.getCanvasAlignment());
         visPanel.setMachineSize(settingsPanel.getMachineWidth(), settingsPanel.getMachineHeight());
+        visPanel.setMachineOrigin(settingsPanel.getMachineOrigin());
 
         visPanel.setDataInvertX(settingsPanel.isInvertX());
         visPanel.setDataInvertY(settingsPanel.isInvertY());

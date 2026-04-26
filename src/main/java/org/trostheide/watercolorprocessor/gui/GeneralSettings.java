@@ -11,6 +11,7 @@ public class GeneralSettings {
     public boolean invertY;
     public boolean swapXY;
     public boolean visualMirror;
+    public String machineOrigin;
     public int speedDown;
     public int speedUp;
     public int penUp;
@@ -20,4 +21,6 @@ public class GeneralSettings {
     public int viewRotation;
     public double paddingX;
     public double paddingY;
+    public String backend = "axidraw";
+    public GcodeSettings gcode;
 }

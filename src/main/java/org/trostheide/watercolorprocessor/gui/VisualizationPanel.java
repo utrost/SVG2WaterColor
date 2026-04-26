@@ -67,6 +67,9 @@ public class VisualizationPanel extends JPanel {
     private double paddingX = 0;
     private double paddingY = 0;
 
+    // Machine origin corner (determines how motor coords map to screen)
+    private String machineOrigin = "Top-Right";
+
     // Refill Stations (loaded from config)
     public record Station(String name, double x, double y) {
     }
@@ -132,10 +135,14 @@ public class VisualizationPanel extends JPanel {
         repaint();
     }
 
-    // DEPRECATED: viewMirror is removed. This is a no-op for compatibility.
-    public void setViewMirror(boolean mirror) {
-        // No-op. Mirror view is no longer supported.
+    public void setMachineOrigin(String origin) {
+        this.machineOrigin = origin;
+        recalculateTransform();
+        repaint();
     }
+
+    private boolean isOriginRight() { return machineOrigin.contains("Right"); }
+    private boolean isOriginBottom() { return machineOrigin.contains("Bottom"); }
 
     public VisualizationPanel() {
         setBackground(new Color(35, 35, 40));
@@ -344,40 +351,45 @@ public class VisualizationPanel extends JPanel {
         rotMinY = rawMinY;
         rotMaxY = rawMaxY;
 
-        // Calculate alignment offset based on TRANSFORMED bounds (matching driver)
+        // Determine left/right edge semantics based on origin (mirrors driver's calculate_alignment_offset)
+        double contentLeftEdge, contentRightEdge, targetLeft, targetRight;
+        if (isOriginRight()) {
+            contentRightEdge = tMinX;
+            contentLeftEdge = tMaxX;
+            targetLeft = machineWidth - paddingX;
+            targetRight = paddingX;
+        } else {
+            contentLeftEdge = tMinX;
+            contentRightEdge = tMaxX;
+            targetLeft = paddingX;
+            targetRight = machineWidth - paddingX;
+        }
+        double targetTop = paddingY;
+        double targetBottom = machineHeight - paddingY;
+
         switch (canvasAlignment) {
-            case "Top Right":
-                // Content's physical "right" edge (tMinX after transforms) -> Machine origin
-                // (0)
-                // Content's physical "top" edge (tMinY) -> 0
-                alignOffsetX = -tMinX + paddingX;
-                alignOffsetY = -tMinY + paddingY;
-                break;
-
             case "Top Left":
-                alignOffsetX = machineWidth - tMaxX - paddingX;
-                alignOffsetY = -tMinY + paddingY;
+                alignOffsetX = targetLeft - contentLeftEdge;
+                alignOffsetY = targetTop - tMinY;
                 break;
-
-            case "Bottom Right":
-                alignOffsetX = -tMinX + paddingX;
-                alignOffsetY = machineHeight - tMaxY - paddingY;
+            case "Top Right":
+                alignOffsetX = targetRight - contentRightEdge;
+                alignOffsetY = targetTop - tMinY;
                 break;
-
             case "Bottom Left":
-                alignOffsetX = machineWidth - tMaxX - paddingX;
-                alignOffsetY = machineHeight - tMaxY - paddingY;
+                alignOffsetX = targetLeft - contentLeftEdge;
+                alignOffsetY = targetBottom - tMaxY;
                 break;
-
+            case "Bottom Right":
+                alignOffsetX = targetRight - contentRightEdge;
+                alignOffsetY = targetBottom - tMaxY;
+                break;
             case "Center":
                 double tWidth = tMaxX - tMinX;
                 double tHeight = tMaxY - tMinY;
-                // Center - no padding logic applied for now, or treat as offset?
-                // User requirement implies "border set-off". Center doesn't have borders.
                 alignOffsetX = (machineWidth - tWidth) / 2 - tMinX;
                 alignOffsetY = (machineHeight - tHeight) / 2 - tMinY;
                 break;
-
             default:
                 alignOffsetX = 0;
                 alignOffsetY = 0;
@@ -421,36 +433,15 @@ public class VisualizationPanel extends JPanel {
     }
 
     /**
-     * Step 7: Map Physical coordinates to Screen coordinates for drawing.
-     * 
-     * Physical Machine (A3 model 2, NO swap):
-     * - Motor X: 0-430 (long axis, horizontal in Landscape)
-     * - Motor Y: 0-297 (short axis, vertical in Landscape)
-     * - Origin: Motor (0,0) at top-right
-     * 
-     * Display (Portrait mode):
-     * - Screen Width: 297 (short axis)
-     * - Screen Height: 420 (long axis)
-     * - Screen (0,0): top-left
-     * 
-     * When SwapXY is ENABLED:
-     * - Motor X now uses the INPUT Y (which may be large)
-     * - Motor Y now uses the INPUT X
-     * - So Motor X values can exceed 297 (up to 420+)
-     * - We need to swap the mapping
+     * Step 7: Map motor coordinates to screen coordinates.
+     *
+     * Motor (0,0) sits at the machineOrigin corner.
+     * Screen (0,0) is always top-left, X right, Y down.
      */
-    private double[] physicalToScreen(double physX, double physY) {
-        if (swapXY) {
-            // With SwapXY, motor coords are swapped relative to display:
-            // - physX (was input Y) maps to screen Y (long axis, height)
-            // - physY (was input X) maps to screen X (short axis, width)
-            // Origin is still top-right, so Y grows down (physX to screenY directly)
-            // and X grows left (physY to screenX with flip)
-            return new double[] { machineWidth - physY, physX };
-        } else {
-            // Standard mapping: origin at top-right, X grows left
-            return new double[] { machineWidth - physX, physY };
-        }
+    private double[] physicalToScreen(double motorX, double motorY) {
+        double screenX = isOriginRight() ? (machineWidth - motorX) : motorX;
+        double screenY = isOriginBottom() ? (machineHeight - motorY) : motorY;
+        return new double[] { screenX, screenY };
     }
 
     /**
@@ -582,9 +573,9 @@ public class VisualizationPanel extends JPanel {
         g2.setColor(new Color(180, 180, 180));
         g2.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
         g2.drawString(String.format(
-                "PhysPos: %.1f, %.1f | Align: %s | Rot: %d | Swap: %s | InvX: %s | InvY: %s",
+                "PhysPos: %.1f, %.1f | Align: %s | Rot: %d | Origin: %s | Swap: %s",
                 currentX, currentY, canvasAlignment, dataRotation,
-                swapXY ? "Y" : "N", invertX ? "Y" : "N", invertY ? "Y" : "N"), 10, h - 10);
+                machineOrigin, swapXY ? "Y" : "N"), 10, h - 10);
     }
 
     // ----- Internal Types -----
