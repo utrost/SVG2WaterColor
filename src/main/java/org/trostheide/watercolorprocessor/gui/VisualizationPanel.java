@@ -320,18 +320,18 @@ public class VisualizationPanel extends JPanel {
                 y = dy + cy;
             }
 
-            // Apply swap
-            if (swapXY) {
+            // Apply swap (portrait-effective)
+            if (effectiveSwap()) {
                 double temp = x;
                 x = y;
                 y = temp;
             }
 
-            // Apply invert
-            if (invertX) {
+            // Apply invert (portrait-effective)
+            if (effectiveInvertX()) {
                 x = machineWidth - x;
             }
-            if (invertY) {
+            if (effectiveInvertY()) {
                 y = machineHeight - y;
             }
 
@@ -363,7 +363,14 @@ public class VisualizationPanel extends JPanel {
         double targetTop = paddingY;
         double targetBottom = machineHeight - paddingY;
 
-        switch (canvasAlignment) {
+        // In portrait mode, translate the alignment label to account for swapped axes.
+        // The two corners sharing exactly one component with the origin swap with each other.
+        String effectiveAlign = canvasAlignment;
+        if (isPortrait()) {
+            effectiveAlign = translateAlignmentForPortrait(canvasAlignment);
+        }
+
+        switch (effectiveAlign) {
             case "Top Left":
                 alignOffsetX = targetLeft - contentLeftEdge;
                 alignOffsetY = targetTop - tMinY;
@@ -405,23 +412,47 @@ public class VisualizationPanel extends JPanel {
     }
 
     /**
+     * In portrait mode, the alignment corners sharing exactly one component with the
+     * origin corner swap with each other (the origin corner and its diagonal are fixed).
+     */
+    private String translateAlignmentForPortrait(String label) {
+        boolean xor = isOriginRight() ^ isOriginBottom();
+        if (xor) {
+            // Origin is Top-Right or Bottom-Left: swap Top-Left <-> Bottom-Right
+            if ("Top Left".equals(label)) return "Bottom Right";
+            if ("Bottom Right".equals(label)) return "Top Left";
+        } else {
+            // Origin is Top-Left or Bottom-Right: swap Top-Right <-> Bottom-Left
+            if ("Top Right".equals(label)) return "Bottom Left";
+            if ("Bottom Left".equals(label)) return "Top Right";
+        }
+        return label;
+    }
+
+    // Portrait-effective values: portrait swaps which axis gets inverted and auto-toggles swap
+    private boolean effectiveSwap() { return isPortrait() ^ swapXY; }
+    private boolean effectiveInvertX() { return isPortrait() ? invertY : invertX; }
+    private boolean effectiveInvertY() { return isPortrait() ? invertX : invertY; }
+
+    /**
      * Step 6: Simulate Driver transforms (SwapXY, InvertX, InvertY).
+     * Uses portrait-effective values so the visualization matches the driver.
      */
     private Point2D simulateDriver(Point2D phys) {
         double x = phys.x();
         double y = phys.y();
 
-        if (swapXY) {
+        if (effectiveSwap()) {
             double temp = x;
             x = y;
             y = temp;
         }
 
-        if (invertX) {
+        if (effectiveInvertX()) {
             x = machineWidth - x;
         }
 
-        if (invertY) {
+        if (effectiveInvertY()) {
             y = machineHeight - y;
         }
 
@@ -590,13 +621,15 @@ public class VisualizationPanel extends JPanel {
         g2.setColor(new Color(180, 180, 180));
         g2.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
         g2.drawString(String.format(
-                "PhysPos: %.1f, %.1f | Align: %s | Rot: %d | Origin: %s | Swap: %s",
+                "PhysPos: %.1f, %.1f | Align: %s | Rot: %d | Origin: %s | %s",
                 currentX, currentY, canvasAlignment, dataRotation,
-                machineOrigin, swapXY ? "Y" : "N"), 10, h - 10);
+                machineOrigin, orientation), 10, h - 10);
         g2.drawString(String.format(
-                "Bed: %.0fx%.0f | Offset: %.1f, %.1f | InvX: %s InvY: %s | %s",
+                "Bed: %.0fx%.0f | Offset: %.1f, %.1f | EffSwap: %s EffInvX: %s EffInvY: %s",
                 machineWidth, machineHeight, alignOffsetX, alignOffsetY,
-                invertX ? "Y" : "N", invertY ? "Y" : "N", orientation), 10, h - 24);
+                effectiveSwap() ? "Y" : "N",
+                effectiveInvertX() ? "Y" : "N",
+                effectiveInvertY() ? "Y" : "N"), 10, h - 24);
     }
 
     // ----- Internal Types -----

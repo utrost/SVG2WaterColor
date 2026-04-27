@@ -116,7 +116,7 @@ public class SettingsPanel extends JPanel {
         ButtonGroup orientationGroup = new ButtonGroup();
         orientationGroup.add(landscapeRadio);
         orientationGroup.add(portraitRadio);
-        landscapeRadio.setSelected(true);
+        portraitRadio.setSelected(true);
         landscapeRadio.addActionListener(e -> fireVisualChange());
         portraitRadio.addActionListener(e -> fireVisualChange());
         backendRow.add(Box.createHorizontalStrut(12));
@@ -303,8 +303,8 @@ public class SettingsPanel extends JPanel {
         mockCheckBox.setToolTipText("Simulate plotter without hardware");
         flagsPanel.add(mockCheckBox);
 
-        swapXYCheckBox = new JCheckBox("Swap X/Y", true);
-        swapXYCheckBox.setToolTipText("Swap motor X and Y axes (when motor wiring is rotated 90 degrees)");
+        swapXYCheckBox = new JCheckBox("Swap X/Y", false);
+        swapXYCheckBox.setToolTipText("Manual axis swap for unusual hardware wiring. Portrait mode auto-swaps; this is an additional toggle on top.");
         swapXYCheckBox.addActionListener(e -> {
             if (manualSession != null) manualSession.resetServer();
             fireVisualChange();
@@ -605,6 +605,7 @@ public class SettingsPanel extends JPanel {
     public boolean isOriginRight() { return getMachineOrigin().contains("Right"); }
     public boolean isOriginBottom() { return getMachineOrigin().contains("Bottom"); }
     public boolean isSwapXY() { return swapXYCheckBox.isSelected(); }
+    public boolean isPortrait() { return portraitRadio != null && portraitRadio.isSelected(); }
     public String getCanvasAlignment() { return (String) canvasAlignmentCombo.getSelectedItem(); }
     public double getPaddingX() { return (Double) paddingXSpinner.getValue(); }
     public double getPaddingY() { return (Double) paddingYSpinner.getValue(); }
@@ -735,7 +736,14 @@ public class SettingsPanel extends JPanel {
                 if (gen != null) {
                     modelComboBox.setSelectedIndex(gen.modelIndex);
                     mockCheckBox.setSelected(gen.mock);
-                    swapXYCheckBox.setSelected(gen.swapXY);
+                    // Portrait mode now auto-swaps; old configs had manual swap=true for portrait.
+                    // Reset swap to false if loading a portrait config from before auto-swap was added.
+                    boolean migratedSwap = gen.swapXY;
+                    if ("Portrait".equals(gen.orientation) && gen.swapXY && gen.machineOrigin != null
+                            && gen.machineOrigin.contains("Right")) {
+                        migratedSwap = false;
+                    }
+                    swapXYCheckBox.setSelected(migratedSwap);
 
                     if (gen.machineOrigin != null) {
                         machineOriginCombo.setSelectedItem(gen.machineOrigin);
