@@ -97,7 +97,7 @@ def perform_refill(ad, station_id):
 
     print("--- Refill Complete ---")
 
-def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=False, invert_y=False, swap_xy=False, offset_x=0, offset_y=0, width=None, height=None, data_rotation=0, content_bounds=None):
+def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=False, invert_y=False, swap_xy=False, offset_x=0, offset_y=0, width=None, height=None, data_rotation=0, content_bounds=None, debug_position=False):
     print(f"\n=== Starting Layer: {layer['id']} (Station: {layer['stationId']}) ===")
     input("Press Enter to start this layer (Ensure correct paint is ready)...")
 
@@ -112,6 +112,17 @@ def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=
                                max_x=maxX, max_y=maxY,
                                data_rotation=data_rotation, content_bounds=content_bounds)
 
+    def check_position(expected_x, expected_y):
+        if not debug_position:
+            return
+        actual = ad.query_position()
+        if actual is None:
+            return
+        ax, ay = actual
+        dx, dy = ax - expected_x, ay - expected_y
+        flag = " *** DRIFT" if abs(dx) > 0.5 or abs(dy) > 0.5 else ""
+        print(f"  [POS] cmd=({expected_x:.2f}, {expected_y:.2f})  hw=({ax:.2f}, {ay:.2f})  delta=({dx:+.2f}, {dy:+.2f}){flag}")
+
     commands = layer['commands']
     for cmd in commands:
         op = cmd['op']
@@ -124,6 +135,7 @@ def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=
 
             print(f"  [MOVE] To ({px:.2f}, {py:.2f}) [Orig: ({cmd['x']}, {cmd['y']})]")
             ad.moveto(px, py)
+            check_position(px, py)
             if report_pos:
                 print(f"POS:X:{px}:Y:{py}")
                 sys.stdout.flush()
@@ -143,6 +155,7 @@ def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=
                         print(f"       [WARNING] Coordinate out of bounds for Model {model} (Max: {maxX}x{maxY})!")
 
                 ad.lineto(px, py)
+                check_position(px, py)
                 if report_pos:
                     print(f"POS:X:{px}:Y:{py}")
                     sys.stdout.flush()
@@ -261,6 +274,7 @@ def main():
     parser.add_argument('--data-rotation', type=int, default=0, choices=[0, 90, 180, 270], help='Rotate drawing data (degrees CCW)')
     parser.add_argument('--padding-x', type=float, default=0.0, help='Padding X (mm) for alignment')
     parser.add_argument('--padding-y', type=float, default=0.0, help='Padding Y (mm) for alignment')
+    parser.add_argument('--debug-position', action='store_true', help='Query and log actual hardware position after moves')
 
     args = parser.parse_args()
 
@@ -311,11 +325,12 @@ def main():
     # Initialize Driver
     ad = _create_backend(args, loaded_general)
 
-    # pyaxidraw requires: interactive() -> set options -> update() -> connect()
+    # Official pyaxidraw pattern: interactive() -> set options -> connect()
+    # Options set before connect() are auto-applied on connection.
     print("INFO: Entering Interactive Mode...")
     ad.interactive()
 
-    # Configure all options before connecting
+    # Set all options BEFORE connect() so they auto-apply
     ad.options.units = 2
     if args.backend != 'gcode':
         ad.options.pen_pos_up = config.PEN_HEIGHTS["UP"]
@@ -336,10 +351,9 @@ def main():
         ad.options.speed_pendown = args.speed_down
         ad.options.speed_penup = args.speed_up
 
-    print("INFO: Applying options...")
-    ad.update()
+    print(f"INFO: Active Options -> Units: {ad.options.units} (mm), Model: {args.model}")
 
-    # Connect to hardware
+    # Connect - options set above are auto-applied by pyaxidraw
     print("INFO: Connecting to plotter...")
     connected = ad.connect()
 
@@ -352,7 +366,13 @@ def main():
             print("       Continuing because we are in Mock mode (or fell back to it).")
 
     print("INFO: Connection Successful.")
-    print(f"INFO: Active Options -> Units: {ad.options.units} (mm), Model: {args.model}")
+
+    if args.debug_position:
+        pos = ad.query_position()
+        if pos:
+            print(f"INFO: [POSCHECK] Initial position: ({pos[0]:.2f}, {pos[1]:.2f}) mm")
+        else:
+            print("INFO: [POSCHECK] Position query not supported by this backend")
 
     # Safety: Always raise pen on connect/start
     print("INFO: Safely raising pen...")
@@ -501,7 +521,7 @@ def main():
         content_bounds = {'minX': min_x, 'maxX': max_x, 'minY': min_y, 'maxY': max_y} if has_points else None
 
         for layer in data['layers']:
-            execute_layer(ad, layer, report_pos=args.report_position, verbose=args.verbose, model=args.model, invert_x=args.invert_x, invert_y=args.invert_y, swap_xy=args.swap_xy, offset_x=offset_x, offset_y=offset_y, width=machine_w, height=machine_h, data_rotation=args.data_rotation, content_bounds=content_bounds)
+            execute_layer(ad, layer, report_pos=args.report_position, verbose=args.verbose, model=args.model, invert_x=args.invert_x, invert_y=args.invert_y, swap_xy=args.swap_xy, offset_x=offset_x, offset_y=offset_y, width=machine_w, height=machine_h, data_rotation=args.data_rotation, content_bounds=content_bounds, debug_position=args.debug_position)
 
         # Return to home
         print("\nPlot Complete. Returning Home.")

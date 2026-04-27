@@ -15,6 +15,7 @@ public class PlotterPanel extends JPanel {
     private final JTextField jsonField;
     private final JTextField pythonPathField;
     private final JCheckBox verboseCheckBox;
+    private final JCheckBox debugPositionCheckBox;
     private final SettingsPanel settingsPanel;
     private final JTextArea consoleArea;
     private final VisualizationPanel visPanel;
@@ -93,8 +94,13 @@ public class PlotterPanel extends JPanel {
         configPanel.add(label("Options"), gbc);
 
         gbc.gridx = 1; gbc.weightx = 1.0; gbc.gridwidth = 2;
+        JPanel optionsRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         verboseCheckBox = new JCheckBox("Verbose Logging", true);
-        configPanel.add(verboseCheckBox, gbc);
+        debugPositionCheckBox = new JCheckBox("Debug Position", false);
+        debugPositionCheckBox.setToolTipText("Query actual hardware position after each move and compare to expected");
+        optionsRow.add(verboseCheckBox);
+        optionsRow.add(debugPositionCheckBox);
+        configPanel.add(optionsRow, gbc);
 
         add(configPanel, BorderLayout.NORTH);
 
@@ -224,6 +230,9 @@ public class PlotterPanel extends JPanel {
         }
         if (verboseCheckBox.isSelected()) {
             cmd.add("--verbose");
+        }
+        if (debugPositionCheckBox.isSelected()) {
+            cmd.add("--debug-position");
         }
 
         if (!isGcode) {

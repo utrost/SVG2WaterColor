@@ -32,3 +32,16 @@ class AxiDrawBackend(PlotterBackend):
 
     def pendown(self):
         self._ad.pendown()
+
+    def query_position(self):
+        try:
+            result = self._ad.usb_query('QS\r')
+            result_list = result.strip().split(",")
+            a_pos, b_pos = int(result_list[0]), int(result_list[1])
+            x_inch = (a_pos + b_pos) / (4 * self._ad.params.native_res_factor)
+            y_inch = (a_pos - b_pos) / (4 * self._ad.params.native_res_factor)
+            x_mm = x_inch * 25.4
+            y_mm = y_inch * 25.4
+            return (x_mm, y_mm)
+        except Exception:
+            return None
