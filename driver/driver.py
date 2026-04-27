@@ -311,38 +311,19 @@ def main():
     # Initialize Driver
     ad = _create_backend(args, loaded_general)
 
-    # Ensure Global Units are MM
-    ad.options.units = 2
-    ad.update()
-
-    # Enter Interactive Context
+    # pyaxidraw requires: interactive() -> set options -> update() -> connect()
     print("INFO: Entering Interactive Mode...")
     ad.interactive()
 
-    # Attempt Connection
-    print("INFO: Connecting to AxiDraw...")
-    connected = ad.connect()
-
-    if not connected:
-        print("ERROR: Could not connect to AxiDraw! Check USB connection and power.")
-        if not args.mock:
-            print("       Exiting...")
-            sys.exit(1)
-        else:
-            print("       Continuing because we are in Mock mode (or fell back to it).")
-
-    print("INFO: Connection Successful.")
-
-    # Setup Options (AxiDraw-specific: percentage-based speeds and pen heights)
+    # Configure all options before connecting
+    ad.options.units = 2
     if args.backend != 'gcode':
-        print(f"INFO: Setting Pen Heights -> UP: {config.PEN_HEIGHTS['UP']}%, DOWN: {config.PEN_HEIGHTS['DOWN']}%")
         ad.options.pen_pos_up = config.PEN_HEIGHTS["UP"]
         ad.options.pen_pos_down = config.PEN_HEIGHTS["DOWN"]
 
         if args.pen_up is not None:
             print(f"INFO: Overriding Pen Up -> {args.pen_up}%")
             ad.options.pen_pos_up = args.pen_up
-
         if args.pen_down is not None:
             print(f"INFO: Overriding Pen Down -> {args.pen_down}%")
             ad.options.pen_pos_down = args.pen_down
@@ -355,12 +336,23 @@ def main():
         ad.options.speed_pendown = args.speed_down
         ad.options.speed_penup = args.speed_up
 
-        ad.options.units = 2
+    print("INFO: Applying options...")
+    ad.update()
 
-        print("INFO: Updating AxiDraw options...")
-        ad.update()
+    # Connect to hardware
+    print("INFO: Connecting to plotter...")
+    connected = ad.connect()
 
-    print(f"DEBUG: ad.options.units is now {ad.options.units}")
+    if not connected:
+        print("ERROR: Could not connect to plotter! Check USB connection and power.")
+        if not args.mock:
+            print("       Exiting...")
+            sys.exit(1)
+        else:
+            print("       Continuing because we are in Mock mode (or fell back to it).")
+
+    print("INFO: Connection Successful.")
+    print(f"INFO: Active Options -> Units: {ad.options.units} (mm), Model: {args.model}")
 
     # Safety: Always raise pen on connect/start
     print("INFO: Safely raising pen...")
@@ -384,8 +376,6 @@ def main():
         my = args.move_y if args.move_y is not None else 0.0
         print(f"INFO: Manual Move -> X: {mx} mm, Y: {my} mm")
 
-        ad.options.units = 2
-        ad.update()
         ad.moveto(mx, my)
 
         print("INFO: Manual move complete. Exiting.")
@@ -395,9 +385,6 @@ def main():
     # Interactive Server Mode
     if args.interactive_server:
         print("INFO: Starting Interactive Server Mode...")
-        ad.options.units = 2
-        ad.update()
-
         print("SERVER_READY")
         sys.stdout.flush()
 
@@ -482,12 +469,20 @@ def main():
         # Calculate Content Bounds & Offset if Alignment Requested
         offset_x = 0
         offset_y = 0
-        if args.backend == 'gcode' and hasattr(ad.options, 'machine_width'):
-            machine_w = args.machine_width or ad.options.machine_width
-            machine_h = args.machine_height or ad.options.machine_height
+        # Machine dimensions: CLI > gcode config > model defaults
+        if args.machine_width:
+            machine_w = args.machine_width
+        elif args.backend == 'gcode' and hasattr(ad.options, 'machine_width'):
+            machine_w = ad.options.machine_width
         else:
             machine_w = 300.0 if args.model == 1 else 430.0
+        if args.machine_height:
+            machine_h = args.machine_height
+        elif args.backend == 'gcode' and hasattr(ad.options, 'machine_height'):
+            machine_h = ad.options.machine_height
+        else:
             machine_h = 215.0 if args.model == 1 else 297.0
+        print(f"INFO: Machine Dimensions -> {machine_w:.0f} x {machine_h:.0f} mm")
 
         min_x, min_y, max_x, max_y, has_points = calculate_content_bounds(data['layers'])
 
