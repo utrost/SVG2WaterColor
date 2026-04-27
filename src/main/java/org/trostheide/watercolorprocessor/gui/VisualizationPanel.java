@@ -470,20 +470,30 @@ public class VisualizationPanel extends JPanel {
         int w = getWidth();
         int h = getHeight();
 
-        // Calculate scale to fit machine bed in panel
-        double scaleX = (w - 40) / machineWidth;
-        double scaleY = (h - 40) / machineHeight;
+        boolean portrait = "Portrait".equals(orientation);
+        double displayW = portrait ? machineHeight : machineWidth;
+        double displayH = portrait ? machineWidth : machineHeight;
+
+        // Calculate scale to fit displayed bed in panel
+        double scaleX = (w - 40) / displayW;
+        double scaleY = (h - 40) / displayH;
         double scale = Math.min(scaleX, scaleY);
         if (scale <= 0)
             scale = 1.0;
 
-        // Center the machine bed in the panel
-        double tx = 20 + (w - 40 - machineWidth * scale) / 2.0;
-        double ty = 20 + (h - 40 - machineHeight * scale) / 2.0;
+        // Center the displayed bed in the panel
+        double tx = 20 + (w - 40 - displayW * scale) / 2.0;
+        double ty = 20 + (h - 40 - displayH * scale) / 2.0;
 
         AffineTransform old = g2.getTransform();
         g2.translate(tx, ty);
         g2.scale(scale, scale);
+
+        if (portrait) {
+            // Rotate motor-space (WxH landscape) into portrait display (HxW)
+            g2.translate(0, machineWidth);
+            g2.rotate(-Math.PI / 2);
+        }
 
         // --- Draw Machine Bed ---
         g2.setColor(new Color(50, 52, 58));
