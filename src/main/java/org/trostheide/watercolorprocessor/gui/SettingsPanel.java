@@ -627,29 +627,16 @@ public class SettingsPanel extends JPanel {
         if ("gcode".equals(getBackend())) {
             return (Double) gcodeWidthSpinner.getValue();
         }
-        boolean isPortrait = portraitRadio != null && portraitRadio.isSelected();
-        double w;
-        if (getPlotterModelIndex() == 0)
-            w = 297;
-        else
-            w = 430;
-        return isPortrait ? getMachineHeightLimit() : w;
-    }
-
-    private double getMachineHeightLimit() {
-        if (getPlotterModelIndex() == 0) return 210;
-        return 297;
+        // AxiDraw machine bed dimensions (must match driver.py)
+        // V3 (A4): 300mm x 215mm, V3 XL (A3): 430mm x 297mm
+        return getPlotterModelIndex() == 0 ? 300.0 : 430.0;
     }
 
     public double getMachineHeight() {
         if ("gcode".equals(getBackend())) {
             return (Double) gcodeHeightSpinner.getValue();
         }
-        boolean isPortrait = portraitRadio != null && portraitRadio.isSelected();
-        if (isPortrait) {
-            return (getPlotterModelIndex() == 0) ? 297 : 430;
-        }
-        return getMachineHeightLimit();
+        return getPlotterModelIndex() == 0 ? 215.0 : 297.0;
     }
 
     public void setSettingsEnabled(boolean enabled) {
