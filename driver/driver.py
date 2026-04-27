@@ -119,12 +119,9 @@ def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=
         if actual is None:
             return
         ax, ay = actual
-        dx, dy = abs(ax - expected_x), abs(ay - expected_y)
-        if dx > 0.5 or dy > 0.5:
-            print(f"  [POSCHECK] MISMATCH! Expected ({expected_x:.2f}, {expected_y:.2f}) "
-                  f"Actual ({ax:.2f}, {ay:.2f}) Delta ({dx:.2f}, {dy:.2f})")
-        else:
-            print(f"  [POSCHECK] OK ({ax:.2f}, {ay:.2f})")
+        dx, dy = ax - expected_x, ay - expected_y
+        flag = " *** DRIFT" if abs(dx) > 0.5 or abs(dy) > 0.5 else ""
+        print(f"  [POS] cmd=({expected_x:.2f}, {expected_y:.2f})  hw=({ax:.2f}, {ay:.2f})  delta=({dx:+.2f}, {dy:+.2f}){flag}")
 
     commands = layer['commands']
     for cmd in commands:
