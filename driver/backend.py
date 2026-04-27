@@ -50,3 +50,7 @@ class PlotterBackend(ABC):
     @abstractmethod
     def pendown(self):
         ...
+
+    def query_position(self):
+        """Query actual hardware position. Returns (x_mm, y_mm) or None if unsupported."""
+        return None
