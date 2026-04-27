@@ -216,13 +216,9 @@ public class PlotterPanel extends JPanel {
             cmd.add("--mock");
         }
 
-        if (settingsPanel.isInvertX()) {
-            cmd.add("--invert-x");
-        }
+        cmd.add("--machine-origin");
+        cmd.add(settingsPanel.getMachineOrigin().toLowerCase().replace(" ", "-"));
 
-        if (settingsPanel.isInvertY()) {
-            cmd.add("--invert-y");
-        }
         if (settingsPanel.isSwapXY()) {
             cmd.add("--swap-xy");
         }
@@ -255,10 +251,6 @@ public class PlotterPanel extends JPanel {
         cmd.add(String.valueOf(settingsPanel.getPaddingX()));
         cmd.add("--padding-y");
         cmd.add(String.valueOf(settingsPanel.getPaddingY()));
-
-        if (settingsPanel.isOriginRight()) {
-            cmd.add("--origin-right");
-        }
 
         int rotation = settingsPanel.getViewRotation();
         if (rotation != 0) {
@@ -388,10 +380,8 @@ public class PlotterPanel extends JPanel {
                 cmd.add("--mock");
             if (verboseCheckBox.isSelected())
                 cmd.add("--verbose");
-            if (settingsPanel.isInvertX())
-                cmd.add("--invert-x");
-            if (settingsPanel.isInvertY())
-                cmd.add("--invert-y");
+            cmd.add("--machine-origin");
+            cmd.add(settingsPanel.getMachineOrigin().toLowerCase().replace(" ", "-"));
             if (settingsPanel.isSwapXY())
                 cmd.add("--swap-xy");
 
