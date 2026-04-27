@@ -158,11 +158,6 @@ public class VisualizationPanel extends JPanel {
         currentX = 0;
         currentY = 0;
 
-        rawMinX = Double.MAX_VALUE;
-        rawMinY = Double.MAX_VALUE;
-        rawMaxX = -Double.MAX_VALUE;
-        rawMaxY = -Double.MAX_VALUE;
-
         try {
             JsonNode root = mapper.readTree(jsonFile);
             JsonNode layers = root.get("layers");
@@ -177,11 +172,6 @@ public class VisualizationPanel extends JPanel {
                                 double x = p.get("x").asDouble();
                                 double y = p.get("y").asDouble();
                                 stroke.add(new Point2D(x, y));
-
-                                rawMinX = Math.min(rawMinX, x);
-                                rawMaxX = Math.max(rawMaxX, x);
-                                rawMinY = Math.min(rawMinY, y);
-                                rawMaxY = Math.max(rawMaxY, y);
                             }
                             if (!stroke.isEmpty()) {
                                 allPaths.add(stroke);
@@ -283,15 +273,18 @@ public class VisualizationPanel extends JPanel {
         }
 
         // Step 1: Calculate RAW bounds (before any transform) - same as driver
-        double rawMinX = Double.MAX_VALUE, rawMaxX = -Double.MAX_VALUE;
-        double rawMinY = Double.MAX_VALUE, rawMaxY = -Double.MAX_VALUE;
+        // Use instance fields directly so rotateAroundCenter sees correct values
+        this.rawMinX = Double.MAX_VALUE;
+        this.rawMaxX = -Double.MAX_VALUE;
+        this.rawMinY = Double.MAX_VALUE;
+        this.rawMaxY = -Double.MAX_VALUE;
 
         for (List<Point2D> path : allPaths) {
             for (Point2D p : path) {
-                rawMinX = Math.min(rawMinX, p.x());
-                rawMaxX = Math.max(rawMaxX, p.x());
-                rawMinY = Math.min(rawMinY, p.y());
-                rawMaxY = Math.max(rawMaxY, p.y());
+                this.rawMinX = Math.min(this.rawMinX, p.x());
+                this.rawMaxX = Math.max(this.rawMaxX, p.x());
+                this.rawMinY = Math.min(this.rawMinY, p.y());
+                this.rawMaxY = Math.max(this.rawMaxY, p.y());
             }
         }
 

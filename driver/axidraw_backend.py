@@ -8,12 +8,17 @@ class AxiDrawBackend(PlotterBackend):
 
     def interactive(self):
         self._ad.interactive()
+        # Re-bind: interactive() may replace the internal options object
+        self.options = self._ad.options
 
     def update(self):
         self._ad.update()
 
     def connect(self) -> bool:
-        return self._ad.connect()
+        result = self._ad.connect()
+        # Re-bind again in case connect() replaced options
+        self.options = self._ad.options
+        return result
 
     def disconnect(self):
         self._ad.disconnect()
