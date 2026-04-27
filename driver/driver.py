@@ -311,11 +311,25 @@ def main():
     # Initialize Driver
     ad = _create_backend(args, loaded_general)
 
-    # pyaxidraw requires: interactive() -> set options -> update() -> connect()
+    # pyaxidraw requires: interactive() -> connect() -> set options -> update()
     print("INFO: Entering Interactive Mode...")
     ad.interactive()
 
-    # Configure all options before connecting
+    # Connect to hardware first (required before update())
+    print("INFO: Connecting to plotter...")
+    connected = ad.connect()
+
+    if not connected:
+        print("ERROR: Could not connect to plotter! Check USB connection and power.")
+        if not args.mock:
+            print("       Exiting...")
+            sys.exit(1)
+        else:
+            print("       Continuing because we are in Mock mode (or fell back to it).")
+
+    print("INFO: Connection Successful.")
+
+    # Configure options after connection
     ad.options.units = 2
     if args.backend != 'gcode':
         ad.options.pen_pos_up = config.PEN_HEIGHTS["UP"]
@@ -338,20 +352,6 @@ def main():
 
     print("INFO: Applying options...")
     ad.update()
-
-    # Connect to hardware
-    print("INFO: Connecting to plotter...")
-    connected = ad.connect()
-
-    if not connected:
-        print("ERROR: Could not connect to plotter! Check USB connection and power.")
-        if not args.mock:
-            print("       Exiting...")
-            sys.exit(1)
-        else:
-            print("       Continuing because we are in Mock mode (or fell back to it).")
-
-    print("INFO: Connection Successful.")
     print(f"INFO: Active Options -> Units: {ad.options.units} (mm), Model: {args.model}")
 
     # Safety: Always raise pen on connect/start

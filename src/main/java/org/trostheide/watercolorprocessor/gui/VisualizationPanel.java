@@ -438,7 +438,25 @@ public class VisualizationPanel extends JPanel {
      * Motor (0,0) sits at the machineOrigin corner.
      * Screen (0,0) is always top-left, X right, Y down.
      */
+    private boolean isPortrait() {
+        return "Portrait".equals(orientation);
+    }
+
+    private double displayWidth() {
+        return isPortrait() ? machineHeight : machineWidth;
+    }
+
+    private double displayHeight() {
+        return isPortrait() ? machineWidth : machineHeight;
+    }
+
     private double[] physicalToScreen(double motorX, double motorY) {
+        if (isPortrait()) {
+            // Portrait: motor X → screen Y, motor Y → screen X
+            double screenX = isOriginRight() ? (machineHeight - motorY) : motorY;
+            double screenY = isOriginBottom() ? (machineWidth - motorX) : motorX;
+            return new double[] { screenX, screenY };
+        }
         double screenX = isOriginRight() ? (machineWidth - motorX) : motorX;
         double screenY = isOriginBottom() ? (machineHeight - motorY) : motorY;
         return new double[] { screenX, screenY };
@@ -470,37 +488,30 @@ public class VisualizationPanel extends JPanel {
         int w = getWidth();
         int h = getHeight();
 
-        boolean portrait = "Portrait".equals(orientation);
-        double displayW = portrait ? machineHeight : machineWidth;
-        double displayH = portrait ? machineWidth : machineHeight;
+        double dw = displayWidth();
+        double dh = displayHeight();
 
         // Calculate scale to fit displayed bed in panel
-        double scaleX = (w - 40) / displayW;
-        double scaleY = (h - 40) / displayH;
+        double scaleX = (w - 40) / dw;
+        double scaleY = (h - 40) / dh;
         double scale = Math.min(scaleX, scaleY);
         if (scale <= 0)
             scale = 1.0;
 
         // Center the displayed bed in the panel
-        double tx = 20 + (w - 40 - displayW * scale) / 2.0;
-        double ty = 20 + (h - 40 - displayH * scale) / 2.0;
+        double tx = 20 + (w - 40 - dw * scale) / 2.0;
+        double ty = 20 + (h - 40 - dh * scale) / 2.0;
 
         AffineTransform old = g2.getTransform();
         g2.translate(tx, ty);
         g2.scale(scale, scale);
 
-        if (portrait) {
-            // Rotate motor-space (WxH landscape) into portrait display (HxW)
-            g2.translate(0, machineWidth);
-            g2.rotate(-Math.PI / 2);
-        }
-
         // --- Draw Machine Bed ---
         g2.setColor(new Color(50, 52, 58));
-        g2.fill(new java.awt.geom.Rectangle2D.Double(0, 0, machineWidth, machineHeight));
+        g2.fill(new java.awt.geom.Rectangle2D.Double(0, 0, dw, dh));
         g2.setColor(new Color(80, 82, 90));
         g2.setStroke(new BasicStroke((float) (1.5 / scale)));
-        g2.draw(new java.awt.geom.Rectangle2D.Double(0, 0, machineWidth, machineHeight));
+        g2.draw(new java.awt.geom.Rectangle2D.Double(0, 0, dw, dh));
 
         // --- Draw Origin Marker (Physical 0,0 = Screen Top-Right) ---
         double[] originScreen = physicalToScreen(0, 0);
