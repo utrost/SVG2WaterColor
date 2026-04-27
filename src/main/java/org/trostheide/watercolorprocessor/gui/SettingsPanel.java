@@ -116,7 +116,7 @@ public class SettingsPanel extends JPanel {
         ButtonGroup orientationGroup = new ButtonGroup();
         orientationGroup.add(landscapeRadio);
         orientationGroup.add(portraitRadio);
-        portraitRadio.setSelected(true);
+        landscapeRadio.setSelected(true);
         landscapeRadio.addActionListener(e -> fireVisualChange());
         portraitRadio.addActionListener(e -> fireVisualChange());
         backendRow.add(Box.createHorizontalStrut(12));
@@ -754,7 +754,7 @@ public class SettingsPanel extends JPanel {
 
                     if ("Portrait".equals(gen.orientation)) {
                         portraitRadio.setSelected(true);
-                    } else {
+                    } else if (gen.orientation != null) {
                         landscapeRadio.setSelected(true);
                     }
 
