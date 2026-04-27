@@ -366,6 +366,9 @@ def main():
             print("       Continuing because we are in Mock mode (or fell back to it).")
 
     print("INFO: Connection Successful.")
+    print(f"INFO: Verify options after connect -> units={ad.options.units}, "
+          f"speed_pendown={ad.options.speed_pendown}, speed_penup={ad.options.speed_penup}, "
+          f"pen_pos_up={ad.options.pen_pos_up}, pen_pos_down={ad.options.pen_pos_down}")
 
     if args.debug_position:
         pos = ad.query_position()
