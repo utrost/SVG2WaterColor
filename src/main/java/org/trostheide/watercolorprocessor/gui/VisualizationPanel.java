@@ -102,16 +102,19 @@ public class VisualizationPanel extends JPanel {
 
     public void setSwapXY(boolean swap) {
         this.swapXY = swap;
+        recalculateTransform();
         repaint();
     }
 
     public void setDataInvertX(boolean invert) {
         this.invertX = invert;
+        recalculateTransform();
         repaint();
     }
 
     public void setDataInvertY(boolean invert) {
         this.invertY = invert;
+        recalculateTransform();
         repaint();
     }
 
@@ -590,6 +593,10 @@ public class VisualizationPanel extends JPanel {
                 "PhysPos: %.1f, %.1f | Align: %s | Rot: %d | Origin: %s | Swap: %s",
                 currentX, currentY, canvasAlignment, dataRotation,
                 machineOrigin, swapXY ? "Y" : "N"), 10, h - 10);
+        g2.drawString(String.format(
+                "Bed: %.0fx%.0f | Offset: %.1f, %.1f | InvX: %s InvY: %s | %s",
+                machineWidth, machineHeight, alignOffsetX, alignOffsetY,
+                invertX ? "Y" : "N", invertY ? "Y" : "N", orientation), 10, h - 24);
     }
 
     // ----- Internal Types -----
