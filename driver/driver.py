@@ -275,6 +275,7 @@ def main():
     parser.add_argument('--padding-x', type=float, default=0.0, help='Padding X (mm) for alignment')
     parser.add_argument('--padding-y', type=float, default=0.0, help='Padding Y (mm) for alignment')
     parser.add_argument('--debug-position', action='store_true', help='Query and log actual hardware position after moves')
+    parser.add_argument('--portrait', action='store_true', help='Portrait mode: auto-swaps axes and adjusts inversion for vertical/horizontal mapping')
 
     args = parser.parse_args()
 
@@ -315,6 +316,13 @@ def main():
             if not args.invert_x and loaded_general.get('invertX', False): args.invert_x = True
             if not args.invert_y and loaded_general.get('invertY', False): args.invert_y = True
         if not args.swap_xy and loaded_general.get('swapXY', False): args.swap_xy = True
+
+    # Portrait mode: motor X is vertical, motor Y is horizontal.
+    # Swap which axis gets inverted and toggle swap.
+    # Applied AFTER config resolution so portrait has the final say.
+    if args.portrait:
+        args.invert_x, args.invert_y = args.invert_y, args.invert_x
+        args.swap_xy = not args.swap_xy
 
     print(f"INFO: Active Configuration -> Model: {args.model}, Mock: {args.mock}, InvertX: {args.invert_x}, InvertY: {args.invert_y}, SwapXY: {args.swap_xy}")
 

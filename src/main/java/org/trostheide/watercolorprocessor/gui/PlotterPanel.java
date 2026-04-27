@@ -225,6 +225,10 @@ public class PlotterPanel extends JPanel {
         cmd.add("--machine-origin");
         cmd.add(settingsPanel.getMachineOrigin().toLowerCase().replace(" ", "-"));
 
+        boolean isPortrait = settingsPanel.isPortrait();
+        if (isPortrait) {
+            cmd.add("--portrait");
+        }
         if (settingsPanel.isSwapXY()) {
             cmd.add("--swap-xy");
         }
@@ -252,6 +256,10 @@ public class PlotterPanel extends JPanel {
 
         String alignment = settingsPanel.getCanvasAlignment();
         if (alignment != null && !alignment.isEmpty()) {
+            if (isPortrait) {
+                alignment = translateAlignmentForPortrait(alignment,
+                        settingsPanel.isOriginRight(), settingsPanel.isOriginBottom());
+            }
             cmd.add("--canvas-align");
             cmd.add(alignment.toLowerCase().replace(" ", "-"));
         }
@@ -438,6 +446,18 @@ public class PlotterPanel extends JPanel {
                 appendToConsole("Error sending to server: " + e.getMessage());
             }
         }
+    }
+
+    private static String translateAlignmentForPortrait(String label, boolean originRight, boolean originBottom) {
+        boolean xor = originRight ^ originBottom;
+        if (xor) {
+            if ("Top Left".equals(label)) return "Bottom Right";
+            if ("Bottom Right".equals(label)) return "Top Left";
+        } else {
+            if ("Top Right".equals(label)) return "Bottom Left";
+            if ("Bottom Left".equals(label)) return "Top Right";
+        }
+        return label;
     }
 
     private void updateVisualSettings() {
