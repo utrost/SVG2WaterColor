@@ -488,14 +488,13 @@ public class VisualizationPanel extends JPanel {
     }
 
     private double[] physicalToScreen(double motorX, double motorY) {
-        boolean effectiveBottom = isOriginBottom() ^ flipY;
         if (needsAxisSwap()) {
             double screenX = isOriginRight() ? (machineHeight - motorY) : motorY;
-            double screenY = effectiveBottom ? (machineWidth - motorX) : motorX;
+            double screenY = isOriginBottom() ? (machineWidth - motorX) : motorX;
             return new double[] { screenX, screenY };
         }
         double screenX = isOriginRight() ? (machineWidth - motorX) : motorX;
-        double screenY = effectiveBottom ? (machineHeight - motorY) : motorY;
+        double screenY = isOriginBottom() ? (machineHeight - motorY) : motorY;
         return new double[] { screenX, screenY };
     }
 
@@ -511,11 +510,7 @@ public class VisualizationPanel extends JPanel {
         // 3. Apply alignment offset (driver adds offset AFTER transform_point)
         double x = driverSim.x() + alignOffsetX;
         double y = driverSim.y() + alignOffsetY;
-        // 4. Apply flipY after alignment (matches driver pipeline)
-        if (flipY) {
-            y = machineHeight - y;
-        }
-        // 5. Convert to screen coords for display
+        // flipY is applied in the driver only, not in visualization
         return physicalToScreen(x, y);
     }
 

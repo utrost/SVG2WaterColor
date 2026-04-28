@@ -77,6 +77,7 @@ public class SettingsPanel extends JPanel {
     public interface ManualControlSession {
         void sendRelativeMove(double dx, double dy);
         void sendPenCommand(String direction, int height);
+        void sendRawGcode(String command);
         void resetServer();
     }
 
@@ -497,7 +498,10 @@ public class SettingsPanel extends JPanel {
 
         manualPanel.add(jogPanel, BorderLayout.CENTER);
 
-        // Pen Controls
+        // Pen Controls + Raw G-code
+        JPanel southPanel = new JPanel();
+        southPanel.setLayout(new BoxLayout(southPanel, BoxLayout.Y_AXIS));
+
         JPanel penPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
         JButton testUpBtn = new JButton("Pen UP");
         testUpBtn.putClientProperty("JButton.buttonType", "roundRect");
@@ -507,7 +511,27 @@ public class SettingsPanel extends JPanel {
         testDownBtn.addActionListener(e -> runManualPen("DOWN"));
         penPanel.add(testUpBtn);
         penPanel.add(testDownBtn);
-        manualPanel.add(penPanel, BorderLayout.SOUTH);
+        southPanel.add(penPanel);
+
+        JPanel gcodePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 6, 4));
+        gcodePanel.add(label("G-code"));
+        JTextField gcodeField = new JTextField(14);
+        gcodeField.setToolTipText("Send raw G-code (e.g. $$ for settings, G0 Z5 to test Z axis, M3 S30 for servo)");
+        gcodePanel.add(gcodeField);
+        JButton gcodeSendBtn = new JButton("Send");
+        gcodeSendBtn.putClientProperty("JButton.buttonType", "roundRect");
+        Runnable sendGcode = () -> {
+            String cmd = gcodeField.getText().trim();
+            if (!cmd.isEmpty() && manualSession != null) {
+                manualSession.sendRawGcode(cmd);
+            }
+        };
+        gcodeSendBtn.addActionListener(e -> sendGcode.run());
+        gcodeField.addActionListener(e -> sendGcode.run());
+        gcodePanel.add(gcodeSendBtn);
+        southPanel.add(gcodePanel);
+
+        manualPanel.add(southPanel, BorderLayout.SOUTH);
 
         // Key Bindings
         InputMap im = manualPanel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
@@ -573,7 +597,7 @@ public class SettingsPanel extends JPanel {
         // Initial Load
         loadConfig();
 
-        // Listeners for auto-restart on spinner change
+        // Listeners for auto-restart on spinner change (any hardware-affecting value)
         javax.swing.event.ChangeListener valueChange = e -> {
             if (manualSession != null) manualSession.resetServer();
         };
@@ -581,6 +605,19 @@ public class SettingsPanel extends JPanel {
         speedUpSpinner.addChangeListener(valueChange);
         zUpSpinner.addChangeListener(valueChange);
         zDownSpinner.addChangeListener(valueChange);
+        feedRateDrawSpinner.addChangeListener(valueChange);
+        feedRateTravelSpinner.addChangeListener(valueChange);
+        gcodeServoUpSpinner.addChangeListener(valueChange);
+        gcodeServoDownSpinner.addChangeListener(valueChange);
+        servoPinSpinner.addChangeListener(valueChange);
+        zUpPosSpinner.addChangeListener(valueChange);
+        zDownPosSpinner.addChangeListener(valueChange);
+        penModeCombo.addActionListener(e -> {
+            if (manualSession != null) manualSession.resetServer();
+        });
+        baudRateCombo.addActionListener(e -> {
+            if (manualSession != null) manualSession.resetServer();
+        });
     }
 
     private JLabel label(String text) {

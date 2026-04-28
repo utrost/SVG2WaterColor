@@ -44,6 +44,12 @@ public class PlotterPanel extends JPanel {
             }
 
             @Override
+            public void sendRawGcode(String command) {
+                ensureManualServer();
+                sendServerCommand("RAW " + command);
+            }
+
+            @Override
             public void resetServer() {
                 if (manualServerProcess != null && manualServerProcess.isAlive()) {
                     manualServerProcess.destroy();
@@ -392,6 +398,8 @@ public class PlotterPanel extends JPanel {
             return;
         }
 
+        settingsPanel.saveConfigSilent();
+
         try {
             List<String> cmd = new ArrayList<>();
             cmd.add(pythonPathField.getText());
@@ -401,6 +409,8 @@ public class PlotterPanel extends JPanel {
             if ("gcode".equals(settingsPanel.getBackend())) {
                 cmd.add("--backend");
                 cmd.add("gcode");
+                cmd.add("--serial-port");
+                cmd.add(settingsPanel.getSerialPort());
             }
 
             if (settingsPanel.isMockMode())
