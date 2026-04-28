@@ -454,7 +454,11 @@ public class SettingsPanel extends JPanel {
         JSpinner stepSpinner = new JSpinner(new SpinnerNumberModel(10.0, 0.1, 100.0, 1.0));
         stepPanel.add(stepSpinner);
         invertJogYCheckBox = new JCheckBox("Flip Y", false);
-        invertJogYCheckBox.setToolTipText("Invert Y direction for machines where Y+ goes up (e.g. GRBL/DrawCore)");
+        invertJogYCheckBox.setToolTipText("Invert Y direction globally for machines where Y+ goes up (e.g. GRBL/CNC). Affects jog, drawing, and visualization.");
+        invertJogYCheckBox.addActionListener(e -> {
+            if (manualSession != null) manualSession.resetServer();
+            fireVisualChange();
+        });
         stepPanel.add(invertJogYCheckBox);
         jogPanel.add(stepPanel, mgbc);
 
@@ -614,6 +618,7 @@ public class SettingsPanel extends JPanel {
     public boolean isOriginRight() { return getMachineOrigin().contains("Right"); }
     public boolean isOriginBottom() { return getMachineOrigin().contains("Bottom"); }
     public boolean isSwapXY() { return swapXYCheckBox.isSelected(); }
+    public boolean isFlipY() { return invertJogYCheckBox.isSelected(); }
     public boolean isPortrait() { return portraitRadio != null && portraitRadio.isSelected(); }
     public String getCanvasAlignment() { return (String) canvasAlignmentCombo.getSelectedItem(); }
     public double getPaddingX() { return (Double) paddingXSpinner.getValue(); }

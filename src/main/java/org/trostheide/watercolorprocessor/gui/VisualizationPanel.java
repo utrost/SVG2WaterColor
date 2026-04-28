@@ -69,6 +69,7 @@ public class VisualizationPanel extends JPanel {
 
     // Machine origin corner (determines how motor coords map to screen)
     private String machineOrigin = "Top-Right";
+    private boolean flipY = false;
 
     // Refill Stations (loaded from config)
     public record Station(String name, double x, double y) {
@@ -144,8 +145,15 @@ public class VisualizationPanel extends JPanel {
         repaint();
     }
 
+    public void setFlipY(boolean flip) {
+        this.flipY = flip;
+        recalculateTransform();
+        repaint();
+    }
+
     private boolean isOriginRight() { return machineOrigin.contains("Right"); }
     private boolean isOriginBottom() { return machineOrigin.contains("Bottom"); }
+    private boolean needsAxisSwap() { return isPortrait() && machineWidth > machineHeight; }
 
     public VisualizationPanel() {
         setBackground(new Color(35, 35, 40));
@@ -363,10 +371,10 @@ public class VisualizationPanel extends JPanel {
         double targetTop = paddingY;
         double targetBottom = machineHeight - paddingY;
 
-        // In portrait mode, translate the alignment label to account for swapped axes.
-        // The two corners sharing exactly one component with the origin swap with each other.
+        // When axes are swapped for portrait, translate the alignment label.
+        // Only needed when machine dimensions are landscape-oriented (width > height).
         String effectiveAlign = canvasAlignment;
-        if (isPortrait()) {
+        if (needsAxisSwap()) {
             effectiveAlign = translateAlignmentForPortrait(canvasAlignment);
         }
 
@@ -429,10 +437,12 @@ public class VisualizationPanel extends JPanel {
         return label;
     }
 
-    // Portrait-effective values: portrait swaps which axis gets inverted and auto-toggles swap
-    private boolean effectiveSwap() { return isPortrait() ^ swapXY; }
-    private boolean effectiveInvertX() { return isPortrait() ? invertY : invertX; }
-    private boolean effectiveInvertY() { return isPortrait() ? invertX : invertY; }
+    // Portrait axis swap only when machine dimensions are landscape-oriented (width > height)
+    // and user selects portrait. For machines with portrait dimensions (e.g. GRBL 297x420), no swap needed.
+    // flipY is applied separately after alignment, not here.
+    private boolean effectiveSwap() { return needsAxisSwap() ^ swapXY; }
+    private boolean effectiveInvertX() { return needsAxisSwap() ? invertY : invertX; }
+    private boolean effectiveInvertY() { return needsAxisSwap() ? invertX : invertY; }
 
     /**
      * Step 6: Simulate Driver transforms (SwapXY, InvertX, InvertY).
@@ -470,22 +480,22 @@ public class VisualizationPanel extends JPanel {
     }
 
     private double displayWidth() {
-        return isPortrait() ? machineHeight : machineWidth;
+        return isPortrait() ? Math.min(machineWidth, machineHeight) : Math.max(machineWidth, machineHeight);
     }
 
     private double displayHeight() {
-        return isPortrait() ? machineWidth : machineHeight;
+        return isPortrait() ? Math.max(machineWidth, machineHeight) : Math.min(machineWidth, machineHeight);
     }
 
     private double[] physicalToScreen(double motorX, double motorY) {
-        if (isPortrait()) {
-            // Portrait: motor X → screen Y, motor Y → screen X
+        boolean effectiveBottom = isOriginBottom() ^ flipY;
+        if (needsAxisSwap()) {
             double screenX = isOriginRight() ? (machineHeight - motorY) : motorY;
-            double screenY = isOriginBottom() ? (machineWidth - motorX) : motorX;
+            double screenY = effectiveBottom ? (machineWidth - motorX) : motorX;
             return new double[] { screenX, screenY };
         }
         double screenX = isOriginRight() ? (machineWidth - motorX) : motorX;
-        double screenY = isOriginBottom() ? (machineHeight - motorY) : motorY;
+        double screenY = effectiveBottom ? (machineHeight - motorY) : motorY;
         return new double[] { screenX, screenY };
     }
 
@@ -499,9 +509,14 @@ public class VisualizationPanel extends JPanel {
         // 2. Apply swap/invert (driver's transform_point does this first)
         Point2D driverSim = simulateDriver(rotated);
         // 3. Apply alignment offset (driver adds offset AFTER transform_point)
-        Point2D offsetApplied = new Point2D(driverSim.x() + alignOffsetX, driverSim.y() + alignOffsetY);
-        // 4. Convert to screen coords for display
-        return physicalToScreen(offsetApplied.x(), offsetApplied.y());
+        double x = driverSim.x() + alignOffsetX;
+        double y = driverSim.y() + alignOffsetY;
+        // 4. Apply flipY after alignment (matches driver pipeline)
+        if (flipY) {
+            y = machineHeight - y;
+        }
+        // 5. Convert to screen coords for display
+        return physicalToScreen(x, y);
     }
 
     // ----- Painting -----
@@ -621,15 +636,16 @@ public class VisualizationPanel extends JPanel {
         g2.setColor(new Color(180, 180, 180));
         g2.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
         g2.drawString(String.format(
-                "PhysPos: %.1f, %.1f | Align: %s | Rot: %d | Origin: %s | %s",
+                "PhysPos: %.1f, %.1f | Align: %s | Rot: %d | Origin: %s | %s | FlipY: %s",
                 currentX, currentY, canvasAlignment, dataRotation,
-                machineOrigin, orientation), 10, h - 10);
+                machineOrigin, orientation, flipY ? "Y" : "N"), 10, h - 10);
         g2.drawString(String.format(
-                "Bed: %.0fx%.0f | Offset: %.1f, %.1f | EffSwap: %s EffInvX: %s EffInvY: %s",
+                "Bed: %.0fx%.0f | Offset: %.1f, %.1f | EffSwap: %s EffInvX: %s EffInvY: %s | AxisSwap: %s",
                 machineWidth, machineHeight, alignOffsetX, alignOffsetY,
                 effectiveSwap() ? "Y" : "N",
                 effectiveInvertX() ? "Y" : "N",
-                effectiveInvertY() ? "Y" : "N"), 10, h - 24);
+                effectiveInvertY() ? "Y" : "N",
+                needsAxisSwap() ? "Y" : "N"), 10, h - 24);
     }
 
     // ----- Internal Types -----

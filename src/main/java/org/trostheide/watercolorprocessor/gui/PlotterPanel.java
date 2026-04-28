@@ -232,8 +232,12 @@ public class PlotterPanel extends JPanel {
         cmd.add(settingsPanel.getMachineOrigin().toLowerCase().replace(" ", "-"));
 
         boolean isPortrait = settingsPanel.isPortrait();
-        if (isPortrait) {
+        boolean needsAxisSwap = isPortrait && settingsPanel.getMachineWidth() > settingsPanel.getMachineHeight();
+        if (needsAxisSwap) {
             cmd.add("--portrait");
+        }
+        if (settingsPanel.isFlipY()) {
+            cmd.add("--flip-y");
         }
         if (settingsPanel.isSwapXY()) {
             cmd.add("--swap-xy");
@@ -262,7 +266,7 @@ public class PlotterPanel extends JPanel {
 
         String alignment = settingsPanel.getCanvasAlignment();
         if (alignment != null && !alignment.isEmpty()) {
-            if (isPortrait) {
+            if (needsAxisSwap) {
                 alignment = translateAlignmentForPortrait(alignment,
                         settingsPanel.isOriginRight(), settingsPanel.isOriginBottom());
             }
@@ -473,6 +477,7 @@ public class PlotterPanel extends JPanel {
 
         visPanel.setDataInvertX(settingsPanel.isInvertX());
         visPanel.setDataInvertY(settingsPanel.isInvertY());
+        visPanel.setFlipY(settingsPanel.isFlipY());
 
         visPanel.setSwapXY(settingsPanel.isSwapXY());
         visPanel.setCanvasAlignment(settingsPanel.getCanvasAlignment());
