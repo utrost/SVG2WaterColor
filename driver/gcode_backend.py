@@ -94,7 +94,7 @@ class GcodeBackend(PlotterBackend):
         self._send("G91")
         self._wait_for_ok()
         feed = self.options.feed_rate_travel
-        self._send(f"G0 X{dx:.3f} Y{dy:.3f} F{feed}")
+        self._send(f"G1 X{dx:.3f} Y{dy:.3f} F{feed}")
         self._wait_for_ok()
         self._send("G90")
         self._wait_for_ok()

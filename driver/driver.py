@@ -97,7 +97,7 @@ def perform_refill(ad, station_id):
 
     print("--- Refill Complete ---")
 
-def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=False, invert_y=False, swap_xy=False, offset_x=0, offset_y=0, width=None, height=None, data_rotation=0, content_bounds=None, debug_position=False):
+def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=False, invert_y=False, swap_xy=False, offset_x=0, offset_y=0, width=None, height=None, data_rotation=0, content_bounds=None, debug_position=False, flip_y=False):
     print(f"\n=== Starting Layer: {layer['id']} (Station: {layer['stationId']}) ===")
     input("Press Enter to start this layer (Ensure correct paint is ready)...")
 
@@ -132,6 +132,8 @@ def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=
             # Apply Canvas Alignment Offset
             px += offset_x
             py += offset_y
+            if flip_y:
+                py = maxY - py
 
             print(f"  [MOVE] To ({px:.2f}, {py:.2f}) [Orig: ({cmd['x']}, {cmd['y']})]")
             ad.moveto(px, py)
@@ -148,6 +150,8 @@ def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=
                 # Apply Canvas Alignment Offset
                 px += offset_x
                 py += offset_y
+                if flip_y:
+                    py = maxY - py
 
                 if verbose:
                     print(f"    -> Lineto ({px:.2f}, {py:.2f})")
@@ -276,6 +280,7 @@ def main():
     parser.add_argument('--padding-y', type=float, default=0.0, help='Padding Y (mm) for alignment')
     parser.add_argument('--debug-position', action='store_true', help='Query and log actual hardware position after moves')
     parser.add_argument('--portrait', action='store_true', help='Portrait mode: auto-swaps axes and adjusts inversion for vertical/horizontal mapping')
+    parser.add_argument('--flip-y', action='store_true', help='Flip Y axis direction (for CNC machines where Y+ goes up)')
 
     args = parser.parse_args()
 
@@ -324,7 +329,7 @@ def main():
         args.invert_x, args.invert_y = args.invert_y, args.invert_x
         args.swap_xy = not args.swap_xy
 
-    print(f"INFO: Active Configuration -> Model: {args.model}, Mock: {args.mock}, InvertX: {args.invert_x}, InvertY: {args.invert_y}, SwapXY: {args.swap_xy}")
+    print(f"INFO: Active Configuration -> Model: {args.model}, Mock: {args.mock}, InvertX: {args.invert_x}, InvertY: {args.invert_y}, SwapXY: {args.swap_xy}, FlipY: {args.flip_y}")
 
     # Resolve backend from config if not set on CLI
     if args.backend == 'axidraw' and loaded_general:
@@ -532,7 +537,7 @@ def main():
         content_bounds = {'minX': min_x, 'maxX': max_x, 'minY': min_y, 'maxY': max_y} if has_points else None
 
         for layer in data['layers']:
-            execute_layer(ad, layer, report_pos=args.report_position, verbose=args.verbose, model=args.model, invert_x=args.invert_x, invert_y=args.invert_y, swap_xy=args.swap_xy, offset_x=offset_x, offset_y=offset_y, width=machine_w, height=machine_h, data_rotation=args.data_rotation, content_bounds=content_bounds, debug_position=args.debug_position)
+            execute_layer(ad, layer, report_pos=args.report_position, verbose=args.verbose, model=args.model, invert_x=args.invert_x, invert_y=args.invert_y, swap_xy=args.swap_xy, offset_x=offset_x, offset_y=offset_y, width=machine_w, height=machine_h, data_rotation=args.data_rotation, content_bounds=content_bounds, debug_position=args.debug_position, flip_y=args.flip_y)
 
         # Return to home
         print("\nPlot Complete. Returning Home.")
