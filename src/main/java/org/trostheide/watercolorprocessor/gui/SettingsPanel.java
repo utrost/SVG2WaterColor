@@ -248,14 +248,14 @@ public class SettingsPanel extends JPanel {
         gcodeSettingsPanel.add(label("Machine Width (mm)"), gc);
         gc.gridx = 1; gc.weightx = 0.3;
         gcodeWidthSpinner = new JSpinner(new SpinnerNumberModel(300.0, 10.0, 2000.0, 10.0));
-        gcodeWidthSpinner.addChangeListener(e -> fireVisualChange());
+        gcodeWidthSpinner.addChangeListener(e -> { fireVisualChange(); updateStationSpinnerLimits(); });
         gcodeSettingsPanel.add(gcodeWidthSpinner, gc);
 
         gc.gridx = 2; gc.weightx = 0;
         gcodeSettingsPanel.add(label("Machine Height (mm)"), gc);
         gc.gridx = 3; gc.weightx = 0.3;
         gcodeHeightSpinner = new JSpinner(new SpinnerNumberModel(200.0, 10.0, 2000.0, 10.0));
-        gcodeHeightSpinner.addChangeListener(e -> fireVisualChange());
+        gcodeHeightSpinner.addChangeListener(e -> { fireVisualChange(); updateStationSpinnerLimits(); });
         gcodeSettingsPanel.add(gcodeHeightSpinner, gc);
 
         // CardLayout to swap AxiDraw / G-code panels
@@ -268,7 +268,10 @@ public class SettingsPanel extends JPanel {
             CardLayout cl = (CardLayout) cardPanel.getLayout();
             cl.show(cardPanel, backendCombo.getSelectedIndex() == 0 ? "axidraw" : "gcode");
             fireVisualChange();
+            updateStationSpinnerLimits();
         });
+
+        modelComboBox.addActionListener(e -> updateStationSpinnerLimits());
 
         mainContent.add(hardwarePanel);
         mainContent.add(Box.createVerticalStrut(4));
@@ -395,13 +398,13 @@ public class SettingsPanel extends JPanel {
         fg.gridx = 2; fg.weightx = 0;
         formPanel.add(label("X"), fg);
         fg.gridx = 3; fg.weightx = 0.25;
-        xSpinner = new JSpinner(new SpinnerNumberModel(0.0, 0.0, 300.0, 1.0));
+        xSpinner = new JSpinner(new SpinnerNumberModel(0.0, 0.0, 2000.0, 1.0));
         formPanel.add(xSpinner, fg);
 
         fg.gridx = 4; fg.weightx = 0;
         formPanel.add(label("Y"), fg);
         fg.gridx = 5; fg.weightx = 0.25;
-        ySpinner = new JSpinner(new SpinnerNumberModel(0.0, 0.0, 300.0, 1.0));
+        ySpinner = new JSpinner(new SpinnerNumberModel(0.0, 0.0, 2000.0, 1.0));
         formPanel.add(ySpinner, fg);
 
         fg.gridx = 0; fg.gridy = 1; fg.weightx = 0;
@@ -596,6 +599,7 @@ public class SettingsPanel extends JPanel {
 
         // Initial Load
         loadConfig();
+        updateStationSpinnerLimits();
 
         // Listeners for auto-restart on spinner change (any hardware-affecting value)
         javax.swing.event.ChangeListener valueChange = e -> {
@@ -638,6 +642,15 @@ public class SettingsPanel extends JPanel {
         btn.putClientProperty("JButton.buttonType", "roundRect");
         btn.setFont(btn.getFont().deriveFont(11f));
         return btn;
+    }
+
+    private void updateStationSpinnerLimits() {
+        double maxX = getMachineWidth();
+        double maxY = getMachineHeight();
+        ((SpinnerNumberModel) xSpinner.getModel()).setMaximum(maxX);
+        ((SpinnerNumberModel) ySpinner.getModel()).setMaximum(maxY);
+        if ((Double) xSpinner.getValue() > maxX) xSpinner.setValue(maxX);
+        if ((Double) ySpinner.getValue() > maxY) ySpinner.setValue(maxY);
     }
 
     // --- Public Accessors for PlotterPanel ---

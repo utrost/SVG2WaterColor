@@ -106,6 +106,17 @@ def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=
     maxX = width if width else (300.0 if model == 1 else 430.0)
     maxY = height if height else (215.0 if model == 1 else 297.0)
 
+    oob_count = [0]
+
+    def soft_clamp(x, y):
+        cx = max(0.0, min(x, maxX))
+        cy = max(0.0, min(y, maxY))
+        if cx != x or cy != y:
+            oob_count[0] += 1
+            print(f"  [SOFT LIMIT] Clamped ({x:.2f}, {y:.2f}) -> ({cx:.2f}, {cy:.2f})  "
+                  f"(bed: {maxX:.0f}x{maxY:.0f})")
+        return cx, cy
+
     def do_transform(tx, ty):
         return transform_point(tx, ty,
                                swap_xy=swap_xy, invert_x=invert_x, invert_y=invert_y,
@@ -129,11 +140,11 @@ def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=
 
         if op == "MOVE":
             px, py = do_transform(cmd['x'], cmd['y'])
-            # Apply Canvas Alignment Offset
             px += offset_x
             py += offset_y
             if flip_y:
                 py = maxY - py
+            px, py = soft_clamp(px, py)
 
             print(f"  [MOVE] To ({px:.2f}, {py:.2f}) [Orig: ({cmd['x']}, {cmd['y']})]")
             ad.moveto(px, py)
@@ -147,16 +158,14 @@ def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=
             points = cmd['points']
             for p in points:
                 px, py = do_transform(p['x'], p['y'])
-                # Apply Canvas Alignment Offset
                 px += offset_x
                 py += offset_y
                 if flip_y:
                     py = maxY - py
+                px, py = soft_clamp(px, py)
 
                 if verbose:
                     print(f"    -> Lineto ({px:.2f}, {py:.2f})")
-                    if py > maxY or px > maxX:
-                        print(f"       [WARNING] Coordinate out of bounds for Model {model} (Max: {maxX}x{maxY})!")
 
                 ad.lineto(px, py)
                 check_position(px, py)
@@ -167,6 +176,8 @@ def execute_layer(ad, layer, report_pos=False, verbose=False, model=1, invert_x=
         elif op == "REFILL":
             perform_refill(ad, cmd['stationId'])
 
+    if oob_count[0] > 0:
+        print(f"  [WARNING] {oob_count[0]} point(s) were clamped to machine bounds ({maxX:.0f}x{maxY:.0f}mm)")
     print(f"=== Layer {layer['id']} Complete ===")
 
 def load_station_config(custom_path=None):
@@ -567,6 +578,34 @@ def main():
 
         # Build content bounds dict for execute_layer
         content_bounds = {'minX': min_x, 'maxX': max_x, 'minY': min_y, 'maxY': max_y} if has_points else None
+
+        # Pre-flight bounds check: transform all four content corners and check against machine limits
+        if has_points:
+            corners = [(min_x, min_y), (max_x, min_y), (min_x, max_y), (max_x, max_y)]
+            extremes_x, extremes_y = [], []
+            for cx, cy in corners:
+                tx, ty = transform_point(cx, cy,
+                    swap_xy=args.swap_xy, invert_x=args.invert_x, invert_y=args.invert_y,
+                    max_x=machine_w, max_y=machine_h,
+                    data_rotation=args.data_rotation, content_bounds=content_bounds)
+                tx += offset_x
+                ty += offset_y
+                if args.flip_y:
+                    ty = machine_h - ty
+                extremes_x.append(tx)
+                extremes_y.append(ty)
+            plot_min_x, plot_max_x = min(extremes_x), max(extremes_x)
+            plot_min_y, plot_max_y = min(extremes_y), max(extremes_y)
+            print(f"INFO: Plot bounds -> X: {plot_min_x:.1f} to {plot_max_x:.1f}, Y: {plot_min_y:.1f} to {plot_max_y:.1f}")
+            oob = False
+            if plot_min_x < -0.5 or plot_max_x > machine_w + 0.5:
+                print(f"WARNING: Plot X range [{plot_min_x:.1f}, {plot_max_x:.1f}] exceeds machine width {machine_w:.0f}mm!")
+                oob = True
+            if plot_min_y < -0.5 or plot_max_y > machine_h + 0.5:
+                print(f"WARNING: Plot Y range [{plot_min_y:.1f}, {plot_max_y:.1f}] exceeds machine height {machine_h:.0f}mm!")
+                oob = True
+            if oob:
+                print("WARNING: Some coordinates will be clamped to machine bounds. Drawing may be clipped.")
 
         for layer in data['layers']:
             execute_layer(ad, layer, report_pos=args.report_position, verbose=args.verbose, model=args.model, invert_x=args.invert_x, invert_y=args.invert_y, swap_xy=args.swap_xy, offset_x=offset_x, offset_y=offset_y, width=machine_w, height=machine_h, data_rotation=args.data_rotation, content_bounds=content_bounds, debug_position=args.debug_position, flip_y=args.flip_y)
