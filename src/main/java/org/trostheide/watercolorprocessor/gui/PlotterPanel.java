@@ -23,6 +23,7 @@ public class PlotterPanel extends JPanel {
     private final JButton stopButton;
     private final JButton inputButton;
     private final JSpinner stepSpinner;
+    private final JLabel settingsSummaryLabel;
 
     private Process currentProcess;
     private BufferedWriter processInputWriter;
@@ -80,7 +81,16 @@ public class PlotterPanel extends JPanel {
         optionsRow.add(debugPositionCheckBox);
         configPanel.add(optionsRow, gbc);
 
-        add(configPanel, BorderLayout.NORTH);
+        // Settings summary strip
+        settingsSummaryLabel = new JLabel(" ");
+        settingsSummaryLabel.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
+        settingsSummaryLabel.setForeground(new Color(160, 170, 180));
+        settingsSummaryLabel.setBorder(new EmptyBorder(2, 8, 2, 8));
+
+        JPanel topPanel = new JPanel(new BorderLayout(0, 0));
+        topPanel.add(configPanel, BorderLayout.CENTER);
+        topPanel.add(settingsSummaryLabel, BorderLayout.SOUTH);
+        add(topPanel, BorderLayout.NORTH);
 
         // === Left: Manual Controls ===
         JPanel manualPanel = new JPanel(new BorderLayout(0, 6));
@@ -577,8 +587,21 @@ public class PlotterPanel extends JPanel {
         return label;
     }
 
+    private void updateSettingsSummary() {
+        String backend = "gcode".equals(settingsPanel.getBackend()) ? "GRBL" : "AxiDraw";
+        String port = "gcode".equals(settingsPanel.getBackend())
+                ? " | " + settingsPanel.getSerialPort() : "";
+        settingsSummaryLabel.setText(String.format(
+                "%s%s | %s | %.0f x %.0f mm | Align: %s | %s",
+                backend, port,
+                settingsPanel.getMachineOrigin(),
+                settingsPanel.getMachineWidth(), settingsPanel.getMachineHeight(),
+                settingsPanel.getCanvasAlignment(),
+                settingsPanel.getOrientation()));
+    }
+
     private void updateVisualSettings() {
-        appendToConsole("[DEBUG] Visual Settings Update: Align=" + settingsPanel.getCanvasAlignment());
+        updateSettingsSummary();
         visPanel.setMachineSize(settingsPanel.getMachineWidth(), settingsPanel.getMachineHeight());
         visPanel.setMachineOrigin(settingsPanel.getMachineOrigin());
 
