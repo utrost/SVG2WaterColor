@@ -51,7 +51,14 @@ class GcodeBackend(PlotterBackend):
                 timeout=5
             )
             time.sleep(2)
-            self._serial.flushInput()
+            # Read and display GRBL boot message
+            while self._serial.in_waiting > 0:
+                line = self._serial.readline().decode(errors='replace').strip()
+                if line:
+                    print(f"GRBL: {line}")
+            # Unlock alarm state (GRBL boots in alarm on many setups)
+            self._send("$X")
+            self._wait_for_ok()
             self._send("G21")
             self._wait_for_ok()
             self._send("G90")

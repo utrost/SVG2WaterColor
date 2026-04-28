@@ -216,6 +216,12 @@ public class PlotterPanel extends JPanel {
         if (isGcode) {
             cmd.add("--backend");
             cmd.add("gcode");
+            cmd.add("--serial-port");
+            cmd.add(settingsPanel.getSerialPort());
+            cmd.add("--machine-width");
+            cmd.add(String.valueOf(settingsPanel.getMachineWidth()));
+            cmd.add("--machine-height");
+            cmd.add(String.valueOf(settingsPanel.getMachineHeight()));
         }
 
         if (settingsPanel.isMockMode()) {
