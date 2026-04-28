@@ -44,6 +44,12 @@ public class PlotterPanel extends JPanel {
             }
 
             @Override
+            public void sendRawGcode(String command) {
+                ensureManualServer();
+                sendServerCommand("RAW " + command);
+            }
+
+            @Override
             public void resetServer() {
                 if (manualServerProcess != null && manualServerProcess.isAlive()) {
                     manualServerProcess.destroy();
