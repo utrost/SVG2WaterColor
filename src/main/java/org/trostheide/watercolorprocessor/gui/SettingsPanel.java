@@ -573,7 +573,7 @@ public class SettingsPanel extends JPanel {
         // Initial Load
         loadConfig();
 
-        // Listeners for auto-restart on spinner change
+        // Listeners for auto-restart on spinner change (any hardware-affecting value)
         javax.swing.event.ChangeListener valueChange = e -> {
             if (manualSession != null) manualSession.resetServer();
         };
@@ -581,6 +581,19 @@ public class SettingsPanel extends JPanel {
         speedUpSpinner.addChangeListener(valueChange);
         zUpSpinner.addChangeListener(valueChange);
         zDownSpinner.addChangeListener(valueChange);
+        feedRateDrawSpinner.addChangeListener(valueChange);
+        feedRateTravelSpinner.addChangeListener(valueChange);
+        gcodeServoUpSpinner.addChangeListener(valueChange);
+        gcodeServoDownSpinner.addChangeListener(valueChange);
+        servoPinSpinner.addChangeListener(valueChange);
+        zUpPosSpinner.addChangeListener(valueChange);
+        zDownPosSpinner.addChangeListener(valueChange);
+        penModeCombo.addActionListener(e -> {
+            if (manualSession != null) manualSession.resetServer();
+        });
+        baudRateCombo.addActionListener(e -> {
+            if (manualSession != null) manualSession.resetServer();
+        });
     }
 
     private JLabel label(String text) {
