@@ -130,4 +130,27 @@ public class CoordinateTransform {
 
         return new double[] { offsetX, offsetY };
     }
+
+    /**
+     * Map motor coordinates to screen coordinates given the origin corner.
+     * Screen (0,0) is always top-left, X right, Y down.
+     * Motor (0,0) is at the machine's origin corner.
+     *
+     * @param axisSwap  true when portrait display requires swapping motor X/Y to screen Y/X
+     * @param machineW  raw machine width (motor X range)
+     * @param machineH  raw machine height (motor Y range)
+     */
+    public static double[] physicalToScreen(double motorX, double motorY,
+            boolean axisSwap, boolean originRight, boolean originBottom,
+            double machineW, double machineH) {
+
+        if (axisSwap) {
+            double screenX = originRight ? (machineH - motorY) : motorY;
+            double screenY = originBottom ? (machineW - motorX) : motorX;
+            return new double[] { screenX, screenY };
+        }
+        double screenX = originRight ? (machineW - motorX) : motorX;
+        double screenY = originBottom ? (machineH - motorY) : motorY;
+        return new double[] { screenX, screenY };
+    }
 }

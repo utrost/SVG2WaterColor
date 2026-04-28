@@ -13,21 +13,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Visualization Panel - Digital Twin of the Physical Plotter
- * 
- * Based on Requirements.md:
- * - Machine: A3 Portrait, Origin Top-Right, X grows Left, Y grows Down
- * - Input: Standard Canvas (Origin Top-Left, X grows Right, Y grows Down)
- * - Screen: Java2D (Origin Top-Left, X grows Right, Y grows Down)
- * 
- * Transformation Pipeline:
- * 1. Load raw data points
- * 2. Rotate data around content center (user selection: 0, 90, 180, 270)
- * 3. Compute rotated bounds
- * 4. Calculate alignment offset (snap corner to machine corner)
- * 5. Convert to Physical coords (flip X direction + offset)
- * 6. Simulate Driver transforms (SwapXY, InvertX, InvertY)
- * 7. Map Physical to Screen (physicalToScreen)
+ * Visualization Panel - Digital Twin of the Physical Plotter.
+ * Supports all four origin corners (Top-Left, Top-Right, Bottom-Left, Bottom-Right)
+ * and portrait/landscape orientation with automatic axis swap.
+ *
+ * All coordinate math delegates to CoordinateTransform (shared with driver/transforms.py).
  */
 public class VisualizationPanel extends JPanel {
 
@@ -297,12 +287,6 @@ public class VisualizationPanel extends JPanel {
         return label;
     }
 
-    /**
-     * Step 7: Map motor coordinates to screen coordinates.
-     *
-     * Motor (0,0) sits at the machineOrigin corner.
-     * Screen (0,0) is always top-left, X right, Y down.
-     */
     private boolean isPortrait() {
         return "Portrait".equals(orientation);
     }
@@ -316,14 +300,9 @@ public class VisualizationPanel extends JPanel {
     }
 
     private double[] physicalToScreen(double motorX, double motorY) {
-        if (needsAxisSwap()) {
-            double screenX = isOriginRight() ? (machineHeight - motorY) : motorY;
-            double screenY = isOriginBottom() ? (machineWidth - motorX) : motorX;
-            return new double[] { screenX, screenY };
-        }
-        double screenX = isOriginRight() ? (machineWidth - motorX) : motorX;
-        double screenY = isOriginBottom() ? (machineHeight - motorY) : motorY;
-        return new double[] { screenX, screenY };
+        return CoordinateTransform.physicalToScreen(motorX, motorY,
+                needsAxisSwap(), isOriginRight(), isOriginBottom(),
+                machineWidth, machineHeight);
     }
 
     /**
@@ -377,7 +356,7 @@ public class VisualizationPanel extends JPanel {
         g2.setStroke(new BasicStroke((float) (1.5 / scale)));
         g2.draw(new java.awt.geom.Rectangle2D.Double(0, 0, dw, dh));
 
-        // --- Draw Origin Marker (Physical 0,0 = Screen Top-Right) ---
+        // --- Draw Origin Marker ---
         double[] originScreen = physicalToScreen(0, 0);
         g2.setColor(Color.ORANGE);
         double markerR = 5 / scale;
@@ -391,17 +370,15 @@ public class VisualizationPanel extends JPanel {
         g2.setStroke(new BasicStroke((float) (2.0 / scale)));
         double axisLen = Math.min(machineWidth, machineHeight) * 0.15;
 
-        // X-Axis (Physical +X = Left, so Screen -X = Left from origin)
         double[] xAxisEnd = physicalToScreen(axisLen, 0);
         g2.setColor(Color.RED);
         g2.draw(new java.awt.geom.Line2D.Double(originScreen[0], originScreen[1], xAxisEnd[0], xAxisEnd[1]));
-        g2.drawString("X", (float) (xAxisEnd[0] - 10 / scale), (float) (xAxisEnd[1] + 15 / scale));
+        g2.drawString("+X", (float) (xAxisEnd[0] - 10 / scale), (float) (xAxisEnd[1] + 15 / scale));
 
-        // Y-Axis (Physical +Y = Down, so Screen +Y = Down from origin)
         double[] yAxisEnd = physicalToScreen(0, axisLen);
         g2.setColor(Color.GREEN);
         g2.draw(new java.awt.geom.Line2D.Double(originScreen[0], originScreen[1], yAxisEnd[0], yAxisEnd[1]));
-        g2.drawString("Y", (float) (yAxisEnd[0] + 5 / scale), (float) (yAxisEnd[1] + 5 / scale));
+        g2.drawString("+Y", (float) (yAxisEnd[0] + 5 / scale), (float) (yAxisEnd[1] + 5 / scale));
 
         // --- Draw Refill Stations ---
         for (Station station : stations) {
@@ -458,16 +435,15 @@ public class VisualizationPanel extends JPanel {
         g2.setColor(new Color(180, 180, 180));
         g2.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
         g2.drawString(String.format(
-                "PhysPos: %.1f, %.1f | Align: %s | Rot: %d | Origin: %s | %s | FlipY: %s",
+                "Pos: %.1f, %.1f | Align: %s | Rot: %d | Origin: %s | %s",
                 currentX, currentY, canvasAlignment, dataRotation,
-                machineOrigin, orientation, flipY ? "Y" : "N"), 10, h - 10);
+                machineOrigin, orientation), 10, h - 10);
         g2.drawString(String.format(
-                "Bed: %.0fx%.0f | Offset: %.1f, %.1f | EffSwap: %s EffInvX: %s EffInvY: %s | AxisSwap: %s",
+                "Bed: %.0fx%.0f | Offset: %.1f, %.1f | Swap: %s InvX: %s InvY: %s",
                 machineWidth, machineHeight, alignOffsetX, alignOffsetY,
                 effectiveSwap() ? "Y" : "N",
                 effectiveInvertX() ? "Y" : "N",
-                effectiveInvertY() ? "Y" : "N",
-                needsAxisSwap() ? "Y" : "N"), 10, h - 24);
+                effectiveInvertY() ? "Y" : "N"), 10, h - 24);
     }
 
     // ----- Internal Types -----
