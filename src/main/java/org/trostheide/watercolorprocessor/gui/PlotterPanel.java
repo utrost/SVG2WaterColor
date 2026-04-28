@@ -22,6 +22,7 @@ public class PlotterPanel extends JPanel {
     private final JButton startButton;
     private final JButton stopButton;
     private final JButton inputButton;
+    private final JSpinner stepSpinner;
 
     private Process currentProcess;
     private BufferedWriter processInputWriter;
@@ -29,37 +30,8 @@ public class PlotterPanel extends JPanel {
     public PlotterPanel(SettingsPanel settingsPanel) {
         this.settingsPanel = settingsPanel;
 
-        // Define how to run driver commands from settings panel
-        this.settingsPanel.setManualSession(new SettingsPanel.ManualControlSession() {
-            @Override
-            public void sendRelativeMove(double dx, double dy) {
-                ensureManualServer();
-                sendServerCommand(String.format(java.util.Locale.US, "MOVE %f %f", dx, dy));
-            }
-
-            @Override
-            public void sendPenCommand(String direction, int height) {
-                ensureManualServer();
-                sendServerCommand("PEN " + direction);
-            }
-
-            @Override
-            public void sendRawGcode(String command) {
-                ensureManualServer();
-                sendServerCommand("RAW " + command);
-            }
-
-            @Override
-            public void resetServer() {
-                if (manualServerProcess != null && manualServerProcess.isAlive()) {
-                    manualServerProcess.destroy();
-                    manualServerProcess = null;
-                    appendToConsole("[SRV] Server reset due to configuration change.");
-                }
-            }
-        });
-
         this.settingsPanel.addVisualChangeListener(this::updateVisualSettings);
+        this.settingsPanel.addHardwareChangeListener(this::resetManualServer);
 
         setLayout(new BorderLayout(0, 8));
         setBorder(new EmptyBorder(12, 12, 12, 12));
@@ -110,6 +82,124 @@ public class PlotterPanel extends JPanel {
 
         add(configPanel, BorderLayout.NORTH);
 
+        // === Left: Manual Controls ===
+        JPanel manualPanel = new JPanel(new BorderLayout(0, 6));
+        manualPanel.setBorder(createSection("Manual Control"));
+        manualPanel.setPreferredSize(new Dimension(210, 0));
+
+        JPanel jogPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints mc = new GridBagConstraints();
+        mc.insets = new Insets(3, 3, 3, 3);
+        mc.fill = GridBagConstraints.BOTH;
+
+        mc.gridx = 0; mc.gridy = 0; mc.gridwidth = 3;
+        JPanel stepPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 4, 0));
+        stepPanel.setOpaque(false);
+        stepPanel.add(label("Step (mm)"));
+        stepSpinner = new JSpinner(new SpinnerNumberModel(10.0, 0.1, 100.0, 1.0));
+        stepPanel.add(stepSpinner);
+        jogPanel.add(stepPanel, mc);
+
+        JButton btnUp = createJogButton("Up");
+        JButton btnDown = createJogButton("Down");
+        JButton btnLeft = createJogButton("Left");
+        JButton btnRight = createJogButton("Right");
+
+        java.awt.event.ActionListener moveAction = e -> {
+            double step = (Double) stepSpinner.getValue();
+            double dx = 0, dy = 0;
+            boolean flipY = settingsPanel.isFlipY();
+            boolean upSign = settingsPanel.isOriginBottom() ^ flipY;
+            if (e.getSource() == btnUp) dy = upSign ? step : -step;
+            else if (e.getSource() == btnDown) dy = upSign ? -step : step;
+            else if (e.getSource() == btnLeft) dx = settingsPanel.isOriginRight() ? step : -step;
+            else if (e.getSource() == btnRight) dx = settingsPanel.isOriginRight() ? -step : step;
+            runManualMove(dx, dy);
+        };
+        btnUp.addActionListener(moveAction);
+        btnDown.addActionListener(moveAction);
+        btnLeft.addActionListener(moveAction);
+        btnRight.addActionListener(moveAction);
+
+        mc.gridwidth = 1;
+        mc.gridx = 1; mc.gridy = 1; jogPanel.add(btnUp, mc);
+        mc.gridx = 0; mc.gridy = 2; jogPanel.add(btnLeft, mc);
+        mc.gridx = 2; mc.gridy = 2; jogPanel.add(btnRight, mc);
+        mc.gridx = 1; mc.gridy = 3; jogPanel.add(btnDown, mc);
+
+        manualPanel.add(jogPanel, BorderLayout.CENTER);
+
+        JPanel manualSouth = new JPanel();
+        manualSouth.setLayout(new BoxLayout(manualSouth, BoxLayout.Y_AXIS));
+
+        JPanel penPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 4));
+        JButton penUpBtn = new JButton("Pen UP");
+        penUpBtn.putClientProperty("JButton.buttonType", "roundRect");
+        penUpBtn.addActionListener(e -> runManualPen("UP"));
+        JButton penDownBtn = new JButton("Pen DOWN");
+        penDownBtn.putClientProperty("JButton.buttonType", "roundRect");
+        penDownBtn.addActionListener(e -> runManualPen("DOWN"));
+        penPanel.add(penUpBtn);
+        penPanel.add(penDownBtn);
+        manualSouth.add(penPanel);
+
+        JPanel gcodeInputPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 4, 4));
+        gcodeInputPanel.add(label("G-code"));
+        JTextField gcodeField = new JTextField(10);
+        gcodeField.setToolTipText("Send raw G-code (e.g. $$ for settings, G0 Z5 to test Z axis)");
+        gcodeInputPanel.add(gcodeField);
+        JButton gcodeSendBtn = new JButton("Send");
+        gcodeSendBtn.putClientProperty("JButton.buttonType", "roundRect");
+        Runnable sendGcode = () -> {
+            String cmd = gcodeField.getText().trim();
+            if (!cmd.isEmpty()) {
+                ensureManualServer();
+                sendServerCommand("RAW " + cmd);
+            }
+        };
+        gcodeSendBtn.addActionListener(e -> sendGcode.run());
+        gcodeField.addActionListener(e -> sendGcode.run());
+        gcodeInputPanel.add(gcodeSendBtn);
+        manualSouth.add(gcodeInputPanel);
+
+        manualPanel.add(manualSouth, BorderLayout.SOUTH);
+
+        // Key bindings for arrow jog
+        InputMap im = manualPanel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap am = manualPanel.getActionMap();
+        im.put(KeyStroke.getKeyStroke("UP"), "jogUp");
+        im.put(KeyStroke.getKeyStroke("DOWN"), "jogDown");
+        im.put(KeyStroke.getKeyStroke("LEFT"), "jogLeft");
+        im.put(KeyStroke.getKeyStroke("RIGHT"), "jogRight");
+        am.put("jogUp", new AbstractAction() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                double s = (Double) stepSpinner.getValue();
+                boolean up = settingsPanel.isOriginBottom() ^ settingsPanel.isFlipY();
+                runManualMove(0, up ? s : -s);
+            }
+        });
+        am.put("jogDown", new AbstractAction() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                double s = (Double) stepSpinner.getValue();
+                boolean up = settingsPanel.isOriginBottom() ^ settingsPanel.isFlipY();
+                runManualMove(0, up ? -s : s);
+            }
+        });
+        am.put("jogLeft", new AbstractAction() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                double s = (Double) stepSpinner.getValue();
+                runManualMove(settingsPanel.isOriginRight() ? s : -s, 0);
+            }
+        });
+        am.put("jogRight", new AbstractAction() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                double s = (Double) stepSpinner.getValue();
+                runManualMove(settingsPanel.isOriginRight() ? -s : s, 0);
+            }
+        });
+
+        add(manualPanel, BorderLayout.WEST);
+
         // === Center: Split Pane for Console and Visualization ===
         consoleArea = new JTextArea();
         consoleArea.setEditable(false);
@@ -127,7 +217,7 @@ public class PlotterPanel extends JPanel {
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, consoleScroll, visPanel);
         splitPane.setResizeWeight(0.35);
-        splitPane.setDividerLocation(380);
+        splitPane.setDividerLocation(340);
 
         add(splitPane, BorderLayout.CENTER);
 
@@ -164,6 +254,14 @@ public class PlotterPanel extends JPanel {
 
         // Force initial visual update to match settings
         SwingUtilities.invokeLater(this::updateVisualSettings);
+    }
+
+    private JButton createJogButton(String text) {
+        JButton btn = new JButton(text);
+        btn.setPreferredSize(new Dimension(60, 32));
+        btn.putClientProperty("JButton.buttonType", "roundRect");
+        btn.setFont(btn.getFont().deriveFont(11f));
+        return btn;
     }
 
     private JLabel label(String text) {
@@ -212,64 +310,15 @@ public class PlotterPanel extends JPanel {
         visPanel.loadFromJson(jsonFile);
         updateVisualSettings();
 
-        List<String> cmd = new ArrayList<>();
-        cmd.add(pythonPathField.getText().trim());
-        cmd.add("driver/driver.py");
-        cmd.add(jsonFile.getAbsolutePath());
+        List<String> cmd = buildDriverCommand();
+        cmd.add(2, jsonFile.getAbsolutePath()); // insert after driver.py path
 
-        boolean isGcode = "gcode".equals(settingsPanel.getBackend());
-
-        if (isGcode) {
-            cmd.add("--backend");
-            cmd.add("gcode");
-            cmd.add("--serial-port");
-            cmd.add(settingsPanel.getSerialPort());
-            cmd.add("--machine-width");
-            cmd.add(String.valueOf(settingsPanel.getMachineWidth()));
-            cmd.add("--machine-height");
-            cmd.add(String.valueOf(settingsPanel.getMachineHeight()));
-        }
-
-        if (settingsPanel.isMockMode()) {
-            cmd.add("--mock");
-        }
-
-        cmd.add("--machine-origin");
-        cmd.add(settingsPanel.getMachineOrigin().toLowerCase().replace(" ", "-"));
-
-        boolean isPortrait = settingsPanel.isPortrait();
-        boolean needsAxisSwap = isPortrait && settingsPanel.getMachineWidth() > settingsPanel.getMachineHeight();
-        if (needsAxisSwap) {
-            cmd.add("--portrait");
-        }
-        if (settingsPanel.isFlipY()) {
-            cmd.add("--flip-y");
-        }
-        if (settingsPanel.isSwapXY()) {
-            cmd.add("--swap-xy");
-        }
-        if (verboseCheckBox.isSelected()) {
-            cmd.add("--verbose");
-        }
         if (debugPositionCheckBox.isSelected()) {
             cmd.add("--debug-position");
         }
 
-        if (!isGcode) {
-            cmd.add("--model");
-            cmd.add(String.valueOf(settingsPanel.getPlotterModelIndex() + 1));
-
-            cmd.add("--speed-down");
-            cmd.add(String.valueOf(settingsPanel.getDrawSpeed()));
-            cmd.add("--speed-up");
-            cmd.add(String.valueOf(settingsPanel.getTravelSpeed()));
-
-            cmd.add("--pen-up");
-            cmd.add(String.valueOf(settingsPanel.getPenUpHeight()));
-            cmd.add("--pen-down");
-            cmd.add(String.valueOf(settingsPanel.getPenDownHeight()));
-        }
-
+        boolean isPortrait = settingsPanel.isPortrait();
+        boolean needsAxisSwap = isPortrait && settingsPanel.getMachineWidth() > settingsPanel.getMachineHeight();
         String alignment = settingsPanel.getCanvasAlignment();
         if (alignment != null && !alignment.isEmpty()) {
             if (needsAxisSwap) {
@@ -292,8 +341,6 @@ public class PlotterPanel extends JPanel {
         }
 
         cmd.add("--report-position");
-        cmd.add("--config");
-        cmd.add(settingsPanel.getCurrentConfigFile().getAbsolutePath());
 
         consoleArea.setText("");
         appendToConsole("Starting driver...");
@@ -393,6 +440,59 @@ public class PlotterPanel extends JPanel {
     private Process manualServerProcess;
     private BufferedWriter manualServerWriter;
 
+    private List<String> buildDriverCommand() {
+        List<String> cmd = new ArrayList<>();
+        cmd.add(pythonPathField.getText().trim());
+        cmd.add("driver/driver.py");
+
+        boolean isGcode = "gcode".equals(settingsPanel.getBackend());
+        if (isGcode) {
+            cmd.add("--backend");
+            cmd.add("gcode");
+            cmd.add("--serial-port");
+            cmd.add(settingsPanel.getSerialPort());
+            cmd.add("--machine-width");
+            cmd.add(String.valueOf(settingsPanel.getMachineWidth()));
+            cmd.add("--machine-height");
+            cmd.add(String.valueOf(settingsPanel.getMachineHeight()));
+        }
+
+        if (settingsPanel.isMockMode())
+            cmd.add("--mock");
+
+        cmd.add("--machine-origin");
+        cmd.add(settingsPanel.getMachineOrigin().toLowerCase().replace(" ", "-"));
+
+        boolean isPortrait = settingsPanel.isPortrait();
+        boolean needsAxisSwap = isPortrait && settingsPanel.getMachineWidth() > settingsPanel.getMachineHeight();
+        if (needsAxisSwap)
+            cmd.add("--portrait");
+        if (settingsPanel.isFlipY())
+            cmd.add("--flip-y");
+        if (settingsPanel.isSwapXY())
+            cmd.add("--swap-xy");
+        if (verboseCheckBox.isSelected())
+            cmd.add("--verbose");
+
+        if (!isGcode) {
+            cmd.add("--model");
+            cmd.add(String.valueOf(settingsPanel.getPlotterModelIndex() + 1));
+            cmd.add("--speed-down");
+            cmd.add(String.valueOf(settingsPanel.getDrawSpeed()));
+            cmd.add("--speed-up");
+            cmd.add(String.valueOf(settingsPanel.getTravelSpeed()));
+            cmd.add("--pen-up");
+            cmd.add(String.valueOf(settingsPanel.getPenUpHeight()));
+            cmd.add("--pen-down");
+            cmd.add(String.valueOf(settingsPanel.getPenDownHeight()));
+        }
+
+        cmd.add("--config");
+        cmd.add(settingsPanel.getCurrentConfigFile().getAbsolutePath());
+
+        return cmd;
+    }
+
     private void ensureManualServer() {
         if (manualServerProcess != null && manualServerProcess.isAlive()) {
             return;
@@ -401,29 +501,8 @@ public class PlotterPanel extends JPanel {
         settingsPanel.saveConfigSilent();
 
         try {
-            List<String> cmd = new ArrayList<>();
-            cmd.add(pythonPathField.getText());
-            cmd.add("driver/driver.py");
+            List<String> cmd = buildDriverCommand();
             cmd.add("--interactive-server");
-
-            if ("gcode".equals(settingsPanel.getBackend())) {
-                cmd.add("--backend");
-                cmd.add("gcode");
-                cmd.add("--serial-port");
-                cmd.add(settingsPanel.getSerialPort());
-            }
-
-            if (settingsPanel.isMockMode())
-                cmd.add("--mock");
-            if (verboseCheckBox.isSelected())
-                cmd.add("--verbose");
-            cmd.add("--machine-origin");
-            cmd.add(settingsPanel.getMachineOrigin().toLowerCase().replace(" ", "-"));
-            if (settingsPanel.isSwapXY())
-                cmd.add("--swap-xy");
-
-            cmd.add("--config");
-            cmd.add(settingsPanel.getCurrentConfigFile().getAbsolutePath());
 
             appendToConsole("Starting Manual Control Server...");
             ProcessBuilder pb = new ProcessBuilder(cmd);
@@ -466,6 +545,24 @@ public class PlotterPanel extends JPanel {
                 appendToConsole("Error sending to server: " + e.getMessage());
             }
         }
+    }
+
+    private void resetManualServer() {
+        if (manualServerProcess != null && manualServerProcess.isAlive()) {
+            manualServerProcess.destroy();
+            manualServerProcess = null;
+            appendToConsole("[SRV] Server reset due to configuration change.");
+        }
+    }
+
+    private void runManualMove(double dx, double dy) {
+        ensureManualServer();
+        sendServerCommand(String.format(java.util.Locale.US, "MOVE %f %f", dx, dy));
+    }
+
+    private void runManualPen(String direction) {
+        ensureManualServer();
+        sendServerCommand("PEN " + direction);
     }
 
     private static String translateAlignmentForPortrait(String label, boolean originRight, boolean originBottom) {

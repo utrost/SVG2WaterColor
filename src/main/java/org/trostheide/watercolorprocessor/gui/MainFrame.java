@@ -27,17 +27,28 @@ public class MainFrame extends JFrame {
         PlotterPanel plotterPanel = new PlotterPanel(settingsPanel);
         ProcessorPanel processorPanel = new ProcessorPanel(statusArea);
 
+        // Settings Dialog
+        SettingsDialog settingsDialog = new SettingsDialog(this, settingsPanel);
+
+        // Menu Bar
+        JMenuBar menuBar = new JMenuBar();
+        JMenu fileMenu = new JMenu("File");
+        JMenuItem settingsItem = new JMenuItem("Settings...");
+        settingsItem.setAccelerator(KeyStroke.getKeyStroke("ctrl COMMA"));
+        settingsItem.addActionListener(e -> settingsDialog.setVisible(true));
+        fileMenu.add(settingsItem);
+        fileMenu.addSeparator();
+        JMenuItem exitItem = new JMenuItem("Exit");
+        exitItem.addActionListener(e -> dispose());
+        fileMenu.add(exitItem);
+        menuBar.add(fileMenu);
+        setJMenuBar(menuBar);
+
         // Tabs
         JTabbedPane tabbedPane = new JTabbedPane();
         tabbedPane.setFont(tabbedPane.getFont().deriveFont(Font.BOLD, 13f));
         tabbedPane.addTab("  Process SVG  ", processorPanel);
         tabbedPane.addTab("  Plot  ", plotterPanel);
-
-        // Wrap Settings in ScrollPane for small screens
-        JScrollPane settingsScroll = new JScrollPane(settingsPanel);
-        settingsScroll.setBorder(null);
-        settingsScroll.getVerticalScrollBar().setUnitIncrement(16);
-        tabbedPane.addTab("  Settings  ", settingsScroll);
 
         add(tabbedPane, BorderLayout.CENTER);
 

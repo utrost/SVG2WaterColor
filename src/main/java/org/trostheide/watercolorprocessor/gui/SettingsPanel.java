@@ -73,24 +73,25 @@ public class SettingsPanel extends JPanel {
     private final JButton loadFileBtn;
     private final JLabel activeConfigLabel;
 
-    // Callback for running driver commands
-    public interface ManualControlSession {
-        void sendRelativeMove(double dx, double dy);
-        void sendPenCommand(String direction, int height);
-        void sendRawGcode(String command);
-        void resetServer();
-    }
-
-    private ManualControlSession manualSession;
     private Runnable visualChangeListener;
+    private Runnable hardwareChangeListener;
 
     public void addVisualChangeListener(Runnable listener) {
         this.visualChangeListener = listener;
     }
 
+    public void addHardwareChangeListener(Runnable listener) {
+        this.hardwareChangeListener = listener;
+    }
+
     private void fireVisualChange() {
         if (visualChangeListener != null)
             visualChangeListener.run();
+    }
+
+    private void fireHardwareChange() {
+        if (hardwareChangeListener != null)
+            hardwareChangeListener.run();
     }
 
     public SettingsPanel() {
@@ -295,7 +296,7 @@ public class SettingsPanel extends JPanel {
         machineOriginCombo.setSelectedItem("Top-Right");
         machineOriginCombo.setToolTipText("Corner where the plotter's home position (0,0) is located");
         machineOriginCombo.addActionListener(e -> {
-            if (manualSession != null) manualSession.resetServer();
+            fireHardwareChange();
             fireVisualChange();
         });
         coordPanel.add(machineOriginCombo, c);
@@ -311,10 +312,18 @@ public class SettingsPanel extends JPanel {
         swapXYCheckBox = new JCheckBox("Swap X/Y", false);
         swapXYCheckBox.setToolTipText("Manual axis swap for unusual hardware wiring. Portrait mode auto-swaps; this is an additional toggle on top.");
         swapXYCheckBox.addActionListener(e -> {
-            if (manualSession != null) manualSession.resetServer();
+            fireHardwareChange();
             fireVisualChange();
         });
         flagsPanel.add(swapXYCheckBox);
+
+        invertJogYCheckBox = new JCheckBox("Flip Y", false);
+        invertJogYCheckBox.setToolTipText("Flip Y axis direction for machines where Y+ goes up (e.g. GRBL/CNC)");
+        invertJogYCheckBox.addActionListener(e -> {
+            fireHardwareChange();
+            fireVisualChange();
+        });
+        flagsPanel.add(invertJogYCheckBox);
 
         coordPanel.add(flagsPanel, c);
 
@@ -361,9 +370,6 @@ public class SettingsPanel extends JPanel {
 
         mainContent.add(coordPanel);
         mainContent.add(Box.createVerticalStrut(4));
-
-        // === Bottom half: Stations + Manual Control in a horizontal split ===
-        JPanel bottomHalf = new JPanel(new GridLayout(1, 2, 8, 0));
 
         // --- Section 3: Station Management ---
         JPanel stationPanel = new JPanel(new BorderLayout(0, 6));
@@ -438,143 +444,7 @@ public class SettingsPanel extends JPanel {
 
         stationPanel.add(formPanel, BorderLayout.SOUTH);
 
-        bottomHalf.add(stationPanel);
-
-        // --- Section 4: Manual Control ---
-        JPanel manualPanel = new JPanel(new BorderLayout(0, 8));
-        manualPanel.setBorder(createSection("Manual Control"));
-
-        // Jog controls
-        JPanel jogPanel = new JPanel(new GridBagLayout());
-        GridBagConstraints mgbc = new GridBagConstraints();
-        mgbc.insets = new Insets(4, 4, 4, 4);
-        mgbc.fill = GridBagConstraints.BOTH;
-
-        // Step Size + Invert Y toggle
-        mgbc.gridx = 0; mgbc.gridy = 0; mgbc.gridwidth = 3;
-        JPanel stepPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 6, 0));
-        stepPanel.setOpaque(false);
-        stepPanel.add(label("Step (mm)"));
-        JSpinner stepSpinner = new JSpinner(new SpinnerNumberModel(10.0, 0.1, 100.0, 1.0));
-        stepPanel.add(stepSpinner);
-        invertJogYCheckBox = new JCheckBox("Flip Y", false);
-        invertJogYCheckBox.setToolTipText("Invert Y direction globally for machines where Y+ goes up (e.g. GRBL/CNC). Affects jog, drawing, and visualization.");
-        invertJogYCheckBox.addActionListener(e -> {
-            if (manualSession != null) manualSession.resetServer();
-            fireVisualChange();
-        });
-        stepPanel.add(invertJogYCheckBox);
-        jogPanel.add(stepPanel, mgbc);
-
-        // Direction Buttons
-        JButton btnUp = createJogButton("Up");
-        JButton btnDown = createJogButton("Down");
-        JButton btnLeft = createJogButton("Left");
-        JButton btnRight = createJogButton("Right");
-
-        java.awt.event.ActionListener moveAction = e -> {
-            double step = (Double) stepSpinner.getValue();
-            double dx = 0, dy = 0;
-            boolean flipY = invertJogYCheckBox.isSelected();
-            boolean upSign = isOriginBottom() ^ flipY;
-            if (e.getSource() == btnUp) dy = upSign ? step : -step;
-            else if (e.getSource() == btnDown) dy = upSign ? -step : step;
-            else if (e.getSource() == btnLeft) dx = isOriginRight() ? step : -step;
-            else if (e.getSource() == btnRight) dx = isOriginRight() ? -step : step;
-            runManualMove(dx, dy);
-        };
-
-        btnUp.addActionListener(moveAction);
-        btnDown.addActionListener(moveAction);
-        btnLeft.addActionListener(moveAction);
-        btnRight.addActionListener(moveAction);
-
-        mgbc.gridwidth = 1;
-        mgbc.gridx = 1; mgbc.gridy = 1;
-        jogPanel.add(btnUp, mgbc);
-        mgbc.gridx = 0; mgbc.gridy = 2;
-        jogPanel.add(btnLeft, mgbc);
-        mgbc.gridx = 2; mgbc.gridy = 2;
-        jogPanel.add(btnRight, mgbc);
-        mgbc.gridx = 1; mgbc.gridy = 3;
-        jogPanel.add(btnDown, mgbc);
-
-        manualPanel.add(jogPanel, BorderLayout.CENTER);
-
-        // Pen Controls + Raw G-code
-        JPanel southPanel = new JPanel();
-        southPanel.setLayout(new BoxLayout(southPanel, BoxLayout.Y_AXIS));
-
-        JPanel penPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
-        JButton testUpBtn = new JButton("Pen UP");
-        testUpBtn.putClientProperty("JButton.buttonType", "roundRect");
-        testUpBtn.addActionListener(e -> runManualPen("UP"));
-        JButton testDownBtn = new JButton("Pen DOWN");
-        testDownBtn.putClientProperty("JButton.buttonType", "roundRect");
-        testDownBtn.addActionListener(e -> runManualPen("DOWN"));
-        penPanel.add(testUpBtn);
-        penPanel.add(testDownBtn);
-        southPanel.add(penPanel);
-
-        JPanel gcodePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 6, 4));
-        gcodePanel.add(label("G-code"));
-        JTextField gcodeField = new JTextField(14);
-        gcodeField.setToolTipText("Send raw G-code (e.g. $$ for settings, G0 Z5 to test Z axis, M3 S30 for servo)");
-        gcodePanel.add(gcodeField);
-        JButton gcodeSendBtn = new JButton("Send");
-        gcodeSendBtn.putClientProperty("JButton.buttonType", "roundRect");
-        Runnable sendGcode = () -> {
-            String cmd = gcodeField.getText().trim();
-            if (!cmd.isEmpty() && manualSession != null) {
-                manualSession.sendRawGcode(cmd);
-            }
-        };
-        gcodeSendBtn.addActionListener(e -> sendGcode.run());
-        gcodeField.addActionListener(e -> sendGcode.run());
-        gcodePanel.add(gcodeSendBtn);
-        southPanel.add(gcodePanel);
-
-        manualPanel.add(southPanel, BorderLayout.SOUTH);
-
-        // Key Bindings
-        InputMap im = manualPanel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
-        ActionMap am = manualPanel.getActionMap();
-
-        im.put(KeyStroke.getKeyStroke("UP"), "moveUp");
-        im.put(KeyStroke.getKeyStroke("DOWN"), "moveDown");
-        im.put(KeyStroke.getKeyStroke("LEFT"), "moveLeft");
-        im.put(KeyStroke.getKeyStroke("RIGHT"), "moveRight");
-
-        am.put("moveUp", new AbstractAction() {
-            public void actionPerformed(java.awt.event.ActionEvent e) {
-                double s = (Double) stepSpinner.getValue();
-                boolean up = isOriginBottom() ^ invertJogYCheckBox.isSelected();
-                runManualMove(0, up ? s : -s);
-            }
-        });
-        am.put("moveDown", new AbstractAction() {
-            public void actionPerformed(java.awt.event.ActionEvent e) {
-                double s = (Double) stepSpinner.getValue();
-                boolean up = isOriginBottom() ^ invertJogYCheckBox.isSelected();
-                runManualMove(0, up ? -s : s);
-            }
-        });
-        am.put("moveLeft", new AbstractAction() {
-            public void actionPerformed(java.awt.event.ActionEvent e) {
-                double s = (Double) stepSpinner.getValue();
-                runManualMove(isOriginRight() ? s : -s, 0);
-            }
-        });
-        am.put("moveRight", new AbstractAction() {
-            public void actionPerformed(java.awt.event.ActionEvent e) {
-                double s = (Double) stepSpinner.getValue();
-                runManualMove(isOriginRight() ? -s : s, 0);
-            }
-        });
-
-        bottomHalf.add(manualPanel);
-
-        mainContent.add(bottomHalf);
+        mainContent.add(stationPanel);
 
         add(mainContent, BorderLayout.CENTER);
 
@@ -601,10 +471,7 @@ public class SettingsPanel extends JPanel {
         loadConfig();
         updateStationSpinnerLimits();
 
-        // Listeners for auto-restart on spinner change (any hardware-affecting value)
-        javax.swing.event.ChangeListener valueChange = e -> {
-            if (manualSession != null) manualSession.resetServer();
-        };
+        javax.swing.event.ChangeListener valueChange = e -> fireHardwareChange();
         speedDownSpinner.addChangeListener(valueChange);
         speedUpSpinner.addChangeListener(valueChange);
         zUpSpinner.addChangeListener(valueChange);
@@ -616,12 +483,8 @@ public class SettingsPanel extends JPanel {
         servoPinSpinner.addChangeListener(valueChange);
         zUpPosSpinner.addChangeListener(valueChange);
         zDownPosSpinner.addChangeListener(valueChange);
-        penModeCombo.addActionListener(e -> {
-            if (manualSession != null) manualSession.resetServer();
-        });
-        baudRateCombo.addActionListener(e -> {
-            if (manualSession != null) manualSession.resetServer();
-        });
+        penModeCombo.addActionListener(e -> fireHardwareChange());
+        baudRateCombo.addActionListener(e -> fireHardwareChange());
     }
 
     private JLabel label(String text) {
@@ -634,14 +497,6 @@ public class SettingsPanel extends JPanel {
         TitledBorder border = BorderFactory.createTitledBorder(title);
         border.setTitleFont(border.getTitleFont().deriveFont(Font.BOLD, 12f));
         return border;
-    }
-
-    private JButton createJogButton(String text) {
-        JButton btn = new JButton(text);
-        btn.setPreferredSize(new Dimension(90, 36));
-        btn.putClientProperty("JButton.buttonType", "roundRect");
-        btn.setFont(btn.getFont().deriveFont(11f));
-        return btn;
     }
 
     private void updateStationSpinnerLimits() {
@@ -714,6 +569,7 @@ public class SettingsPanel extends JPanel {
         mockCheckBox.setEnabled(enabled);
         machineOriginCombo.setEnabled(enabled);
         swapXYCheckBox.setEnabled(enabled);
+        invertJogYCheckBox.setEnabled(enabled);
         serialPortField.setEnabled(enabled);
         baudRateCombo.setEnabled(enabled);
         penModeCombo.setEnabled(enabled);
@@ -738,7 +594,6 @@ public class SettingsPanel extends JPanel {
         loadFileBtn.setEnabled(enabled);
     }
 
-    public void setManualSession(ManualControlSession session) { this.manualSession = session; }
     public File getCurrentConfigFile() { return currentConfigFile; }
     public Map<String, StationConfig> getStations() { return stations; }
 
@@ -1002,16 +857,4 @@ public class SettingsPanel extends JPanel {
         }
     }
 
-    private void runManualPen(String direction) {
-        if (manualSession != null) {
-            int height = "UP".equals(direction) ? getPenUpHeight() : getPenDownHeight();
-            manualSession.sendPenCommand(direction, height);
-        }
-    }
-
-    private void runManualMove(double dx, double dy) {
-        if (manualSession != null) {
-            manualSession.sendRelativeMove(dx, dy);
-        }
-    }
 }
