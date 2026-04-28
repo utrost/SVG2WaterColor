@@ -21,6 +21,7 @@ public class SettingsPanel extends JPanel {
     private JSpinner zDownSpinner;
     private final JComboBox<String> machineOriginCombo;
     private final JCheckBox swapXYCheckBox;
+    private final JCheckBox invertJogYCheckBox;
     private JRadioButton portraitRadio;
     private JRadioButton landscapeRadio;
     private final JComboBox<String> modelComboBox;
@@ -445,13 +446,16 @@ public class SettingsPanel extends JPanel {
         mgbc.insets = new Insets(4, 4, 4, 4);
         mgbc.fill = GridBagConstraints.BOTH;
 
-        // Step Size
+        // Step Size + Invert Y toggle
         mgbc.gridx = 0; mgbc.gridy = 0; mgbc.gridwidth = 3;
         JPanel stepPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 6, 0));
         stepPanel.setOpaque(false);
         stepPanel.add(label("Step (mm)"));
         JSpinner stepSpinner = new JSpinner(new SpinnerNumberModel(10.0, 0.1, 100.0, 1.0));
         stepPanel.add(stepSpinner);
+        invertJogYCheckBox = new JCheckBox("Flip Y", false);
+        invertJogYCheckBox.setToolTipText("Invert Y direction for machines where Y+ goes up (e.g. GRBL/DrawCore)");
+        stepPanel.add(invertJogYCheckBox);
         jogPanel.add(stepPanel, mgbc);
 
         // Direction Buttons
@@ -463,8 +467,10 @@ public class SettingsPanel extends JPanel {
         java.awt.event.ActionListener moveAction = e -> {
             double step = (Double) stepSpinner.getValue();
             double dx = 0, dy = 0;
-            if (e.getSource() == btnUp) dy = isOriginBottom() ? step : -step;
-            else if (e.getSource() == btnDown) dy = isOriginBottom() ? -step : step;
+            boolean flipY = invertJogYCheckBox.isSelected();
+            boolean upSign = isOriginBottom() ^ flipY;
+            if (e.getSource() == btnUp) dy = upSign ? step : -step;
+            else if (e.getSource() == btnDown) dy = upSign ? -step : step;
             else if (e.getSource() == btnLeft) dx = isOriginRight() ? step : -step;
             else if (e.getSource() == btnRight) dx = isOriginRight() ? -step : step;
             runManualMove(dx, dy);
@@ -511,13 +517,15 @@ public class SettingsPanel extends JPanel {
         am.put("moveUp", new AbstractAction() {
             public void actionPerformed(java.awt.event.ActionEvent e) {
                 double s = (Double) stepSpinner.getValue();
-                runManualMove(0, isOriginBottom() ? s : -s);
+                boolean up = isOriginBottom() ^ invertJogYCheckBox.isSelected();
+                runManualMove(0, up ? s : -s);
             }
         });
         am.put("moveDown", new AbstractAction() {
             public void actionPerformed(java.awt.event.ActionEvent e) {
                 double s = (Double) stepSpinner.getValue();
-                runManualMove(0, isOriginBottom() ? -s : s);
+                boolean up = isOriginBottom() ^ invertJogYCheckBox.isSelected();
+                runManualMove(0, up ? -s : s);
             }
         });
         am.put("moveLeft", new AbstractAction() {
@@ -745,6 +753,7 @@ public class SettingsPanel extends JPanel {
                         migratedSwap = false;
                     }
                     swapXYCheckBox.setSelected(migratedSwap);
+                    invertJogYCheckBox.setSelected(gen.invertJogY);
 
                     if (gen.machineOrigin != null) {
                         machineOriginCombo.setSelectedItem(gen.machineOrigin);
@@ -892,6 +901,7 @@ public class SettingsPanel extends JPanel {
             gen.invertX = isInvertX();
             gen.invertY = isInvertY();
             gen.swapXY = swapXYCheckBox.isSelected();
+            gen.invertJogY = invertJogYCheckBox.isSelected();
             gen.visualMirror = false;
             gen.speedDown = (Integer) speedDownSpinner.getValue();
             gen.speedUp = (Integer) speedUpSpinner.getValue();

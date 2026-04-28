@@ -21,6 +21,7 @@ public class GeneralSettings {
     public int viewRotation;
     public double paddingX;
     public double paddingY;
+    public boolean invertJogY;
     public String backend = "axidraw";
     public GcodeSettings gcode;
 }
