@@ -593,6 +593,7 @@ public class SettingsPanel extends JPanel {
 
     // --- Public Accessors for PlotterPanel ---
     public String getBackend() { return backendCombo.getSelectedIndex() == 0 ? "axidraw" : "gcode"; }
+    public String getSerialPort() { return serialPortField.getText().trim(); }
     public int getDrawSpeed() { return (Integer) speedDownSpinner.getValue(); }
     public int getTravelSpeed() { return (Integer) speedUpSpinner.getValue(); }
     public int getPlotterModelIndex() { return modelComboBox.getSelectedIndex(); }
