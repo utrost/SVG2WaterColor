@@ -107,7 +107,7 @@ class GcodeBackend(PlotterBackend):
         elif mode == "zaxis":
             self._send(f"G0 Z{self.options.z_up:.2f}")
         elif mode == "m3m5":
-            self._send("M5")
+            self._send(f"M3 S{int(self.options.pen_servo_up)}")
         self._wait_for_ok()
 
     def pendown(self):
@@ -118,7 +118,7 @@ class GcodeBackend(PlotterBackend):
         elif mode == "zaxis":
             self._send(f"G1 Z{self.options.z_down:.2f} F{self.options.feed_rate_draw}")
         elif mode == "m3m5":
-            self._send("M3")
+            self._send(f"M3 S{int(self.options.pen_servo_down)}")
         self._wait_for_ok()
         time.sleep(0.15)
 
