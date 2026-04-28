@@ -23,9 +23,6 @@ class AxiDraw(PlotterBackend):
         print("[Mock] AxiDraw Disconnected.")
         self.connected = False
 
-    def plot_setup(self):
-        print("[Mock] Setup complete.")
-
     def moveto(self, x, y):
         self._x, self._y = x, y
         print(f"[Mock] Moving to ({x:.2f}, {y:.2f}) [Pen UP]")
@@ -44,11 +41,6 @@ class AxiDraw(PlotterBackend):
         self._x += dx
         self._y += dy
         print(f"[Mock] Relative Move ({dx:.2f}, {dy:.2f}) [Pen UP]")
-
-    def line(self, dx, dy):
-        self._x += dx
-        self._y += dy
-        print(f"[Mock] Relative Line ({dx:.2f}, {dy:.2f}) [Pen DOWN]")
 
     def query_position(self):
         return (self._x, self._y)

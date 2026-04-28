@@ -212,64 +212,15 @@ public class PlotterPanel extends JPanel {
         visPanel.loadFromJson(jsonFile);
         updateVisualSettings();
 
-        List<String> cmd = new ArrayList<>();
-        cmd.add(pythonPathField.getText().trim());
-        cmd.add("driver/driver.py");
-        cmd.add(jsonFile.getAbsolutePath());
+        List<String> cmd = buildDriverCommand();
+        cmd.add(2, jsonFile.getAbsolutePath()); // insert after driver.py path
 
-        boolean isGcode = "gcode".equals(settingsPanel.getBackend());
-
-        if (isGcode) {
-            cmd.add("--backend");
-            cmd.add("gcode");
-            cmd.add("--serial-port");
-            cmd.add(settingsPanel.getSerialPort());
-            cmd.add("--machine-width");
-            cmd.add(String.valueOf(settingsPanel.getMachineWidth()));
-            cmd.add("--machine-height");
-            cmd.add(String.valueOf(settingsPanel.getMachineHeight()));
-        }
-
-        if (settingsPanel.isMockMode()) {
-            cmd.add("--mock");
-        }
-
-        cmd.add("--machine-origin");
-        cmd.add(settingsPanel.getMachineOrigin().toLowerCase().replace(" ", "-"));
-
-        boolean isPortrait = settingsPanel.isPortrait();
-        boolean needsAxisSwap = isPortrait && settingsPanel.getMachineWidth() > settingsPanel.getMachineHeight();
-        if (needsAxisSwap) {
-            cmd.add("--portrait");
-        }
-        if (settingsPanel.isFlipY()) {
-            cmd.add("--flip-y");
-        }
-        if (settingsPanel.isSwapXY()) {
-            cmd.add("--swap-xy");
-        }
-        if (verboseCheckBox.isSelected()) {
-            cmd.add("--verbose");
-        }
         if (debugPositionCheckBox.isSelected()) {
             cmd.add("--debug-position");
         }
 
-        if (!isGcode) {
-            cmd.add("--model");
-            cmd.add(String.valueOf(settingsPanel.getPlotterModelIndex() + 1));
-
-            cmd.add("--speed-down");
-            cmd.add(String.valueOf(settingsPanel.getDrawSpeed()));
-            cmd.add("--speed-up");
-            cmd.add(String.valueOf(settingsPanel.getTravelSpeed()));
-
-            cmd.add("--pen-up");
-            cmd.add(String.valueOf(settingsPanel.getPenUpHeight()));
-            cmd.add("--pen-down");
-            cmd.add(String.valueOf(settingsPanel.getPenDownHeight()));
-        }
-
+        boolean isPortrait = settingsPanel.isPortrait();
+        boolean needsAxisSwap = isPortrait && settingsPanel.getMachineWidth() > settingsPanel.getMachineHeight();
         String alignment = settingsPanel.getCanvasAlignment();
         if (alignment != null && !alignment.isEmpty()) {
             if (needsAxisSwap) {
@@ -292,8 +243,6 @@ public class PlotterPanel extends JPanel {
         }
 
         cmd.add("--report-position");
-        cmd.add("--config");
-        cmd.add(settingsPanel.getCurrentConfigFile().getAbsolutePath());
 
         consoleArea.setText("");
         appendToConsole("Starting driver...");
@@ -393,6 +342,59 @@ public class PlotterPanel extends JPanel {
     private Process manualServerProcess;
     private BufferedWriter manualServerWriter;
 
+    private List<String> buildDriverCommand() {
+        List<String> cmd = new ArrayList<>();
+        cmd.add(pythonPathField.getText().trim());
+        cmd.add("driver/driver.py");
+
+        boolean isGcode = "gcode".equals(settingsPanel.getBackend());
+        if (isGcode) {
+            cmd.add("--backend");
+            cmd.add("gcode");
+            cmd.add("--serial-port");
+            cmd.add(settingsPanel.getSerialPort());
+            cmd.add("--machine-width");
+            cmd.add(String.valueOf(settingsPanel.getMachineWidth()));
+            cmd.add("--machine-height");
+            cmd.add(String.valueOf(settingsPanel.getMachineHeight()));
+        }
+
+        if (settingsPanel.isMockMode())
+            cmd.add("--mock");
+
+        cmd.add("--machine-origin");
+        cmd.add(settingsPanel.getMachineOrigin().toLowerCase().replace(" ", "-"));
+
+        boolean isPortrait = settingsPanel.isPortrait();
+        boolean needsAxisSwap = isPortrait && settingsPanel.getMachineWidth() > settingsPanel.getMachineHeight();
+        if (needsAxisSwap)
+            cmd.add("--portrait");
+        if (settingsPanel.isFlipY())
+            cmd.add("--flip-y");
+        if (settingsPanel.isSwapXY())
+            cmd.add("--swap-xy");
+        if (verboseCheckBox.isSelected())
+            cmd.add("--verbose");
+
+        if (!isGcode) {
+            cmd.add("--model");
+            cmd.add(String.valueOf(settingsPanel.getPlotterModelIndex() + 1));
+            cmd.add("--speed-down");
+            cmd.add(String.valueOf(settingsPanel.getDrawSpeed()));
+            cmd.add("--speed-up");
+            cmd.add(String.valueOf(settingsPanel.getTravelSpeed()));
+            cmd.add("--pen-up");
+            cmd.add(String.valueOf(settingsPanel.getPenUpHeight()));
+            cmd.add("--pen-down");
+            cmd.add(String.valueOf(settingsPanel.getPenDownHeight()));
+        }
+
+        cmd.add("--config");
+        cmd.add(settingsPanel.getCurrentConfigFile().getAbsolutePath());
+
+        return cmd;
+    }
+
     private void ensureManualServer() {
         if (manualServerProcess != null && manualServerProcess.isAlive()) {
             return;
@@ -401,29 +403,8 @@ public class PlotterPanel extends JPanel {
         settingsPanel.saveConfigSilent();
 
         try {
-            List<String> cmd = new ArrayList<>();
-            cmd.add(pythonPathField.getText());
-            cmd.add("driver/driver.py");
+            List<String> cmd = buildDriverCommand();
             cmd.add("--interactive-server");
-
-            if ("gcode".equals(settingsPanel.getBackend())) {
-                cmd.add("--backend");
-                cmd.add("gcode");
-                cmd.add("--serial-port");
-                cmd.add(settingsPanel.getSerialPort());
-            }
-
-            if (settingsPanel.isMockMode())
-                cmd.add("--mock");
-            if (verboseCheckBox.isSelected())
-                cmd.add("--verbose");
-            cmd.add("--machine-origin");
-            cmd.add(settingsPanel.getMachineOrigin().toLowerCase().replace(" ", "-"));
-            if (settingsPanel.isSwapXY())
-                cmd.add("--swap-xy");
-
-            cmd.add("--config");
-            cmd.add(settingsPanel.getCurrentConfigFile().getAbsolutePath());
 
             appendToConsole("Starting Manual Control Server...");
             ProcessBuilder pb = new ProcessBuilder(cmd);

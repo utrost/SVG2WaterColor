@@ -488,28 +488,11 @@ def main():
                             print("ERR Missing G-code command")
                         else:
                             print(f"INFO: Sending raw: {raw_cmd}")
-                            if hasattr(ad, '_serial') and ad._serial and ad._serial.is_open:
-                                ad._serial.write((raw_cmd + "\n").encode())
-                                ad._serial.flush()
-                                import time as _t
-                                deadline = _t.time() + 2.0
-                                response_lines = []
-                                while _t.time() < deadline:
-                                    if ad._serial.in_waiting > 0:
-                                        resp = ad._serial.readline().decode(errors='replace').strip()
-                                        if resp:
-                                            response_lines.append(resp)
-                                            print(f"GRBL> {resp}")
-                                            sys.stdout.flush()
-                                        if resp.lower().startswith("ok") or resp.lower().startswith("error"):
-                                            break
-                                    else:
-                                        _t.sleep(0.05)
-                                if not response_lines:
-                                    print("GRBL> (no response)")
-                                print("OK")
-                            else:
-                                print("ERR No serial connection (mock mode?)")
+                            responses = ad.send_raw(raw_cmd)
+                            for resp in responses:
+                                print(f"GRBL> {resp}")
+                                sys.stdout.flush()
+                            print("OK")
                     except Exception as e:
                         print(f"ERR {e}")
 

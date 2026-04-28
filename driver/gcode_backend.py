@@ -122,6 +122,44 @@ class GcodeBackend(PlotterBackend):
         self._wait_for_ok()
         time.sleep(0.15)
 
+    def query_position(self):
+        if not self._serial or not self._serial.is_open:
+            return None
+        self._serial.write(b"?")
+        self._serial.flush()
+        start = time.time()
+        while time.time() - start < 2:
+            if self._serial.in_waiting > 0:
+                line = self._serial.readline().decode(errors='replace').strip()
+                if line.startswith("<") and "MPos:" in line:
+                    try:
+                        mpos = line.split("MPos:")[1].split("|")[0]
+                        parts = mpos.split(",")
+                        return (float(parts[0]), float(parts[1]))
+                    except (IndexError, ValueError):
+                        return None
+            else:
+                time.sleep(0.01)
+        return None
+
+    def send_raw(self, command):
+        if not self._serial or not self._serial.is_open:
+            return ["(no serial connection)"]
+        self._serial.write((command + "\n").encode())
+        self._serial.flush()
+        responses = []
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            if self._serial.in_waiting > 0:
+                resp = self._serial.readline().decode(errors='replace').strip()
+                if resp:
+                    responses.append(resp)
+                if resp.lower().startswith("ok") or resp.lower().startswith("error"):
+                    break
+            else:
+                time.sleep(0.05)
+        return responses if responses else ["(no response)"]
+
     def _send(self, cmd):
         if self._serial and self._serial.is_open:
             self._serial.write((cmd + "\n").encode())

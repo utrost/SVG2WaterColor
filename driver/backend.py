@@ -54,3 +54,7 @@ class PlotterBackend(ABC):
     def query_position(self):
         """Query actual hardware position. Returns (x_mm, y_mm) or None if unsupported."""
         return None
+
+    def send_raw(self, command):
+        """Send a raw command string to the hardware. Returns list of response lines."""
+        return ["(not supported by this backend)"]
