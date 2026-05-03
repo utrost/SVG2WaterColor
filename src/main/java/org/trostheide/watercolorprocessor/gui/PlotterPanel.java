@@ -587,6 +587,12 @@ public class PlotterPanel extends JPanel {
         return label;
     }
 
+    public void loadJsonFile(File file) {
+        jsonField.setText(file.getAbsolutePath());
+        visPanel.loadFromJson(file);
+        updateVisualSettings();
+    }
+
     private void updateSettingsSummary() {
         String backend = "gcode".equals(settingsPanel.getBackend()) ? "GRBL" : "AxiDraw";
         String port = "gcode".equals(settingsPanel.getBackend())
