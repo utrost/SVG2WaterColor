@@ -45,7 +45,7 @@ public class MainFrame extends JFrame {
         setJMenuBar(menuBar);
 
         // Draw SVG Panel
-        SvgDrawPanel svgDrawPanel = new SvgDrawPanel();
+        SvgDrawPanel svgDrawPanel = new SvgDrawPanel(settingsPanel);
 
         // Tabs
         JTabbedPane tabbedPane = new JTabbedPane();

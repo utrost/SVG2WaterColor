@@ -169,6 +169,15 @@ public class ProcessorService {
                 case "XL":
                     return XL;
                 default:
+                    // Support custom "WxH" format (e.g. "300x400")
+                    if (s.contains("x")) {
+                        String[] parts = s.split("x");
+                        if (parts.length == 2) {
+                            try {
+                                return new PaperFormat(Double.parseDouble(parts[0]), Double.parseDouble(parts[1]));
+                            } catch (NumberFormatException ignored) {}
+                        }
+                    }
                     return null;
             }
         }

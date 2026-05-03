@@ -19,10 +19,12 @@ public class SvgDrawPanel extends JPanel {
     private final JButton convertButton;
     private final JTextArea logArea;
     private final JProgressBar progressBar;
+    private final SettingsPanel settingsPanel;
 
     private Consumer<File> onJsonReady;
 
-    public SvgDrawPanel() {
+    public SvgDrawPanel(SettingsPanel settingsPanel) {
+        this.settingsPanel = settingsPanel;
         setLayout(new BorderLayout(0, 8));
         setBorder(new EmptyBorder(12, 12, 12, 12));
 
@@ -54,44 +56,44 @@ public class SvgDrawPanel extends JPanel {
         topPanel.add(Box.createVerticalStrut(4));
 
         // Drawing settings
-        JPanel settingsPanel = new JPanel(new GridBagLayout());
-        settingsPanel.setBorder(createSection("Drawing Settings"));
+        JPanel drawSettings = new JPanel(new GridBagLayout());
+        drawSettings.setBorder(createSection("Drawing Settings"));
         GridBagConstraints sgbc = new GridBagConstraints();
         sgbc.insets = new Insets(4, 8, 4, 8);
         sgbc.fill = GridBagConstraints.HORIZONTAL;
         sgbc.anchor = GridBagConstraints.WEST;
 
         sgbc.gridx = 0; sgbc.gridy = 0; sgbc.weightx = 0;
-        settingsPanel.add(label("Curve Step (mm)"), sgbc);
+        drawSettings.add(label("Curve Step (mm)"), sgbc);
 
         sgbc.gridx = 1; sgbc.weightx = 0.4;
         curveStepSpinner = new JSpinner(new SpinnerNumberModel(0.05, 0.001, 10.0, 0.01));
         curveStepSpinner.setToolTipText("Resolution for linearizing curves (smaller = smoother)");
-        settingsPanel.add(curveStepSpinner, sgbc);
+        drawSettings.add(curveStepSpinner, sgbc);
 
         sgbc.gridx = 2; sgbc.weightx = 0;
-        settingsPanel.add(label("Fit to Page"), sgbc);
+        drawSettings.add(label("Fit to"), sgbc);
 
         sgbc.gridx = 3; sgbc.weightx = 0.4;
-        formatCombo = new JComboBox<>(new String[]{"None", "A5", "A4", "A3", "XL"});
-        formatCombo.setSelectedItem("None");
-        formatCombo.setToolTipText("Auto-scale the design to fit a standard paper format");
-        settingsPanel.add(formatCombo, sgbc);
+        formatCombo = new JComboBox<>(new String[]{"None", "Machine", "A5", "A4", "A3", "XL"});
+        formatCombo.setSelectedItem("Machine");
+        formatCombo.setToolTipText("Auto-scale: 'Machine' uses current machine bed dimensions from settings");
+        drawSettings.add(formatCombo, sgbc);
 
         sgbc.gridx = 0; sgbc.gridy = 1; sgbc.weightx = 0;
-        settingsPanel.add(label("Padding (mm)"), sgbc);
+        drawSettings.add(label("Padding (mm)"), sgbc);
 
         sgbc.gridx = 1; sgbc.weightx = 0.4;
         paddingSpinner = new JSpinner(new SpinnerNumberModel(10.0, 0.0, 100.0, 1.0));
         paddingSpinner.setToolTipText("Margin when auto-scaling to a paper format");
-        settingsPanel.add(paddingSpinner, sgbc);
+        drawSettings.add(paddingSpinner, sgbc);
 
         sgbc.gridx = 2; sgbc.weightx = 0; sgbc.gridwidth = 2;
         mirrorCheckBox = new JCheckBox("Mirror Horizontally");
         mirrorCheckBox.setToolTipText("Flip the design along the X axis before processing");
-        settingsPanel.add(mirrorCheckBox, sgbc);
+        drawSettings.add(mirrorCheckBox, sgbc);
 
-        topPanel.add(settingsPanel);
+        topPanel.add(drawSettings);
         topPanel.add(Box.createVerticalStrut(8));
 
         // Action bar
@@ -159,7 +161,13 @@ public class SvgDrawPanel extends JPanel {
         progressBar.setVisible(true);
 
         String selectedFormat = (String) formatCombo.getSelectedItem();
-        if ("None".equals(selectedFormat)) selectedFormat = null;
+        if ("None".equals(selectedFormat)) {
+            selectedFormat = null;
+        } else if ("Machine".equals(selectedFormat)) {
+            double mw = settingsPanel.getMachineWidth();
+            double mh = settingsPanel.getMachineHeight();
+            selectedFormat = String.format(java.util.Locale.US, "%.0fx%.0f", mw, mh);
+        }
 
         double curveStep = (Double) curveStepSpinner.getValue();
         double padding = (Double) paddingSpinner.getValue();
