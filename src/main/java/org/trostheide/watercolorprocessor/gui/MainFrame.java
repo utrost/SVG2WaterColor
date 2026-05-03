@@ -44,11 +44,20 @@ public class MainFrame extends JFrame {
         menuBar.add(fileMenu);
         setJMenuBar(menuBar);
 
+        // Draw SVG Panel
+        SvgDrawPanel svgDrawPanel = new SvgDrawPanel();
+
         // Tabs
         JTabbedPane tabbedPane = new JTabbedPane();
         tabbedPane.setFont(tabbedPane.getFont().deriveFont(Font.BOLD, 13f));
         tabbedPane.addTab("  Process SVG  ", processorPanel);
+        tabbedPane.addTab("  Draw SVG  ", svgDrawPanel);
         tabbedPane.addTab("  Plot  ", plotterPanel);
+
+        svgDrawPanel.setOnJsonReady(jsonFile -> {
+            plotterPanel.loadJsonFile(jsonFile);
+            tabbedPane.setSelectedComponent(plotterPanel);
+        });
 
         add(tabbedPane, BorderLayout.CENTER);
 

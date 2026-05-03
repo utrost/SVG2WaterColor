@@ -230,8 +230,10 @@ public class ProcessorService {
         if (drawables.isEmpty())
             return cmds;
 
-        // Initial Refill for this layer
-        cmds.add(new RefillCommand(commandCounter++, stationId));
+        // Initial Refill for this layer (skip when maxDist <= 0, i.e. no-refill mode)
+        if (maxDist > 0) {
+            cmds.add(new RefillCommand(commandCounter++, stationId));
+        }
         double currentPaintDist = 0.0;
 
         for (Node node : drawables) {
@@ -278,7 +280,7 @@ public class ProcessorService {
                         Point target = new Point(coords[0], coords[1]);
                         double dist = distance(currentPos, target);
 
-                        while (currentPaintDist + dist > maxDist) {
+                        while (maxDist > 0 && currentPaintDist + dist > maxDist) {
                             double rem = maxDist - currentPaintDist;
                             Point split = interpolate(currentPos, target, rem, dist);
 
@@ -304,7 +306,7 @@ public class ProcessorService {
                     case PathIterator.SEG_CLOSE:
                         if (startPoint != null && currentPos != null && !startPoint.equals(currentPos)) {
                             double cDist = distance(currentPos, startPoint);
-                            while (currentPaintDist + cDist > maxDist) {
+                            while (maxDist > 0 && currentPaintDist + cDist > maxDist) {
                                 double rem = maxDist - currentPaintDist;
                                 Point split = interpolate(currentPos, startPoint, rem, cDist);
                                 currentStroke.add(split);

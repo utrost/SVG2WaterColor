@@ -10,27 +10,14 @@ import java.awt.geom.AffineTransform;
 import java.awt.geom.Path2D;
 import java.io.File;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 
 /**
- * Visualization Panel - Digital Twin of the Physical Plotter
- * 
- * Based on Requirements.md:
- * - Machine: A3 Portrait, Origin Top-Right, X grows Left, Y grows Down
- * - Input: Standard Canvas (Origin Top-Left, X grows Right, Y grows Down)
- * - Screen: Java2D (Origin Top-Left, X grows Right, Y grows Down)
- * 
- * Transformation Pipeline:
- * 1. Load raw data points
- * 2. Rotate data around content center (user selection: 0, 90, 180, 270)
- * 3. Compute rotated bounds
- * 4. Calculate alignment offset (snap corner to machine corner)
- * 5. Convert to Physical coords (flip X direction + offset)
- * 6. Simulate Driver transforms (SwapXY, InvertX, InvertY)
- * 7. Map Physical to Screen (physicalToScreen)
+ * Visualization Panel - Digital Twin of the Physical Plotter.
+ * Supports all four origin corners (Top-Left, Top-Right, Bottom-Left, Bottom-Right)
+ * and portrait/landscape orientation with automatic axis swap.
+ *
+ * All coordinate math delegates to CoordinateTransform (shared with driver/transforms.py).
  */
 public class VisualizationPanel extends JPanel {
 
@@ -47,9 +34,6 @@ public class VisualizationPanel extends JPanel {
 
     // Raw Content Bounds (from JSON, before rotation)
     private double rawMinX = 0, rawMaxX = 0, rawMinY = 0, rawMaxY = 0;
-
-    // Rotated Content Bounds (after applying dataRotation)
-    private double rotMinX = 0, rotMaxX = 0, rotMinY = 0, rotMaxY = 0;
 
     // Alignment Offset (calculated based on alignment choice)
     private double alignOffsetX = 0;
@@ -235,56 +219,28 @@ public class VisualizationPanel extends JPanel {
 
     // ----- Transformation Helpers -----
 
-    /**
-     * Step 2: Rotate a point around the raw content center.
-     */
-    private Point2D rotateAroundCenter(Point2D p) {
-        double cx = (rawMinX + rawMaxX) / 2.0;
-        double cy = (rawMinY + rawMaxY) / 2.0;
+    // Portrait axis swap only when machine dimensions are landscape-oriented (width > height)
+    // and user selects portrait. For machines with portrait dimensions (e.g. GRBL 297x420), no swap needed.
+    private boolean effectiveSwap() { return needsAxisSwap() ^ swapXY; }
+    private boolean effectiveInvertX() { return needsAxisSwap() ? invertY : invertX; }
+    private boolean effectiveInvertY() { return needsAxisSwap() ? invertX : invertY; }
 
-        double dx = p.x() - cx;
-        double dy = p.y() - cy;
-
-        double rx, ry;
-        switch (dataRotation) {
-            case 90:
-                rx = -dy;
-                ry = dx;
-                break;
-            case 180:
-                rx = -dx;
-                ry = -dy;
-                break;
-            case 270:
-                rx = dy;
-                ry = -dx;
-                break;
-            default: // 0
-                rx = dx;
-                ry = dy;
-        }
-
-        // Translate back (now centered at origin after rotation, we'll add center back)
-        // Actually, we want the rotated content centered at the same center as before.
-        // But for simplicity, let's just return the rotated coords relative to (0,0).
-        // The alignment offset will place it correctly.
-        return new Point2D(rx + cx, ry + cy);
+    private double[] contentBoundsArray() {
+        return new double[] { rawMinX, rawMaxX, rawMinY, rawMaxY };
     }
 
     /**
-     * Step 3 & 4: Recalculate transformed bounds and alignment offset.
-     * MUST match driver.py's alignment logic exactly!
-     * Driver calculates bounds AFTER applying swap/invert to corners.
+     * Recalculate alignment offset using the shared CoordinateTransform utility.
+     * MUST produce the same result as driver/transforms.py calculate_alignment_offset.
      */
     private void recalculateTransform() {
         if (allPaths.isEmpty()) {
-            rotMinX = rotMaxX = rotMinY = rotMaxY = 0;
+            rawMinX = rawMaxX = rawMinY = rawMaxY = 0;
             alignOffsetX = alignOffsetY = 0;
             return;
         }
 
-        // Step 1: Calculate RAW bounds (before any transform) - same as driver
-        // Use instance fields directly so rotateAroundCenter sees correct values
+        // Calculate raw content bounds
         this.rawMinX = Double.MAX_VALUE;
         this.rawMaxX = -Double.MAX_VALUE;
         this.rawMinY = Double.MAX_VALUE;
@@ -299,124 +255,20 @@ public class VisualizationPanel extends JPanel {
             }
         }
 
-        // Step 2: Transform corners through rotation + swap/invert
-        // Must match driver's get_transformed_point (which now includes rotation)
-        double[][] corners = {
-                { rawMinX, rawMinY }, { rawMaxX, rawMinY },
-                { rawMinX, rawMaxY }, { rawMaxX, rawMaxY }
-        };
-
-        double tMinX = Double.MAX_VALUE, tMaxX = -Double.MAX_VALUE;
-        double tMinY = Double.MAX_VALUE, tMaxY = -Double.MAX_VALUE;
-
-        double cx = (rawMinX + rawMaxX) / 2.0;
-        double cy = (rawMinY + rawMaxY) / 2.0;
-
-        for (double[] c : corners) {
-            double x = c[0], y = c[1];
-
-            // Apply rotation around content center (matching driver)
-            if (dataRotation != 0) {
-                double dx = x - cx;
-                double dy = y - cy;
-                switch (dataRotation) {
-                    case 90:  { double t = dx; dx = -dy; dy = t; break; }
-                    case 180: { dx = -dx; dy = -dy; break; }
-                    case 270: { double t = dx; dx = dy; dy = -t; break; }
-                }
-                x = dx + cx;
-                y = dy + cy;
-            }
-
-            // Apply swap (portrait-effective)
-            if (effectiveSwap()) {
-                double temp = x;
-                x = y;
-                y = temp;
-            }
-
-            // Apply invert (portrait-effective)
-            if (effectiveInvertX()) {
-                x = machineWidth - x;
-            }
-            if (effectiveInvertY()) {
-                y = machineHeight - y;
-            }
-
-            tMinX = Math.min(tMinX, x);
-            tMaxX = Math.max(tMaxX, x);
-            tMinY = Math.min(tMinY, y);
-            tMaxY = Math.max(tMaxY, y);
-        }
-
-        // Store rotated bounds (used in rotateAroundCenter for center calculation)
-        rotMinX = rawMinX;
-        rotMaxX = rawMaxX;
-        rotMinY = rawMinY;
-        rotMaxY = rawMaxY;
-
-        // Determine left/right edge semantics based on origin (mirrors driver's calculate_alignment_offset)
-        double contentLeftEdge, contentRightEdge, targetLeft, targetRight;
-        if (isOriginRight()) {
-            contentRightEdge = tMinX;
-            contentLeftEdge = tMaxX;
-            targetLeft = machineWidth - paddingX;
-            targetRight = paddingX;
-        } else {
-            contentLeftEdge = tMinX;
-            contentRightEdge = tMaxX;
-            targetLeft = paddingX;
-            targetRight = machineWidth - paddingX;
-        }
-        double targetTop = paddingY;
-        double targetBottom = machineHeight - paddingY;
-
-        // When axes are swapped for portrait, translate the alignment label.
-        // Only needed when machine dimensions are landscape-oriented (width > height).
+        // When axes are swapped for portrait, translate the alignment label
         String effectiveAlign = canvasAlignment;
         if (needsAxisSwap()) {
             effectiveAlign = translateAlignmentForPortrait(canvasAlignment);
         }
 
-        switch (effectiveAlign) {
-            case "Top Left":
-                alignOffsetX = targetLeft - contentLeftEdge;
-                alignOffsetY = targetTop - tMinY;
-                break;
-            case "Top Right":
-                alignOffsetX = targetRight - contentRightEdge;
-                alignOffsetY = targetTop - tMinY;
-                break;
-            case "Bottom Left":
-                alignOffsetX = targetLeft - contentLeftEdge;
-                alignOffsetY = targetBottom - tMaxY;
-                break;
-            case "Bottom Right":
-                alignOffsetX = targetRight - contentRightEdge;
-                alignOffsetY = targetBottom - tMaxY;
-                break;
-            case "Center":
-                double tWidth = tMaxX - tMinX;
-                double tHeight = tMaxY - tMinY;
-                alignOffsetX = (machineWidth - tWidth) / 2 - tMinX;
-                alignOffsetY = (machineHeight - tHeight) / 2 - tMinY;
-                break;
-            default:
-                alignOffsetX = 0;
-                alignOffsetY = 0;
-        }
-    }
-
-    /**
-     * Step 5: Convert rotated input point to Physical coordinates.
-     * Simply applies alignment offset. NO X-flip here (driver doesn't flip X by
-     * default).
-     */
-    private Point2D inputToPhysical(Point2D rotatedPoint) {
-        // Just apply offset, no flip!
-        double physX = rotatedPoint.x() + alignOffsetX;
-        double physY = rotatedPoint.y() + alignOffsetY;
-        return new Point2D(physX, physY);
+        double[] offset = CoordinateTransform.calculateAlignmentOffset(
+                effectiveAlign, contentBoundsArray(),
+                machineWidth, machineHeight,
+                effectiveSwap(), effectiveInvertX(), effectiveInvertY(),
+                dataRotation, isOriginRight(),
+                paddingX, paddingY);
+        alignOffsetX = offset[0];
+        alignOffsetY = offset[1];
     }
 
     /**
@@ -426,55 +278,15 @@ public class VisualizationPanel extends JPanel {
     private String translateAlignmentForPortrait(String label) {
         boolean xor = isOriginRight() ^ isOriginBottom();
         if (xor) {
-            // Origin is Top-Right or Bottom-Left: swap Top-Left <-> Bottom-Right
             if ("Top Left".equals(label)) return "Bottom Right";
             if ("Bottom Right".equals(label)) return "Top Left";
         } else {
-            // Origin is Top-Left or Bottom-Right: swap Top-Right <-> Bottom-Left
             if ("Top Right".equals(label)) return "Bottom Left";
             if ("Bottom Left".equals(label)) return "Top Right";
         }
         return label;
     }
 
-    // Portrait axis swap only when machine dimensions are landscape-oriented (width > height)
-    // and user selects portrait. For machines with portrait dimensions (e.g. GRBL 297x420), no swap needed.
-    // flipY is applied separately after alignment, not here.
-    private boolean effectiveSwap() { return needsAxisSwap() ^ swapXY; }
-    private boolean effectiveInvertX() { return needsAxisSwap() ? invertY : invertX; }
-    private boolean effectiveInvertY() { return needsAxisSwap() ? invertX : invertY; }
-
-    /**
-     * Step 6: Simulate Driver transforms (SwapXY, InvertX, InvertY).
-     * Uses portrait-effective values so the visualization matches the driver.
-     */
-    private Point2D simulateDriver(Point2D phys) {
-        double x = phys.x();
-        double y = phys.y();
-
-        if (effectiveSwap()) {
-            double temp = x;
-            x = y;
-            y = temp;
-        }
-
-        if (effectiveInvertX()) {
-            x = machineWidth - x;
-        }
-
-        if (effectiveInvertY()) {
-            y = machineHeight - y;
-        }
-
-        return new Point2D(x, y);
-    }
-
-    /**
-     * Step 7: Map motor coordinates to screen coordinates.
-     *
-     * Motor (0,0) sits at the machineOrigin corner.
-     * Screen (0,0) is always top-left, X right, Y down.
-     */
     private boolean isPortrait() {
         return "Portrait".equals(orientation);
     }
@@ -488,30 +300,24 @@ public class VisualizationPanel extends JPanel {
     }
 
     private double[] physicalToScreen(double motorX, double motorY) {
-        if (needsAxisSwap()) {
-            double screenX = isOriginRight() ? (machineHeight - motorY) : motorY;
-            double screenY = isOriginBottom() ? (machineWidth - motorX) : motorX;
-            return new double[] { screenX, screenY };
-        }
-        double screenX = isOriginRight() ? (machineWidth - motorX) : motorX;
-        double screenY = isOriginBottom() ? (machineHeight - motorY) : motorY;
-        return new double[] { screenX, screenY };
+        return CoordinateTransform.physicalToScreen(motorX, motorY,
+                needsAxisSwap(), isOriginRight(), isOriginBottom(),
+                machineWidth, machineHeight);
     }
 
     /**
      * Full pipeline: Raw Point -> Screen Point
-     * Order matches driver.py: rotate -> swap/invert -> offset
+     * Uses shared CoordinateTransform (same math as driver/transforms.py).
      */
     private double[] transformPoint(Point2D rawPoint) {
-        // 1. Rotate around content center
-        Point2D rotated = rotateAroundCenter(rawPoint);
-        // 2. Apply swap/invert (driver's transform_point does this first)
-        Point2D driverSim = simulateDriver(rotated);
-        // 3. Apply alignment offset (driver adds offset AFTER transform_point)
-        double x = driverSim.x() + alignOffsetX;
-        double y = driverSim.y() + alignOffsetY;
-        // flipY is applied in the driver only, not in visualization
-        return physicalToScreen(x, y);
+        double[] motor = CoordinateTransform.transformPoint(
+                rawPoint.x(), rawPoint.y(),
+                effectiveSwap(), effectiveInvertX(), effectiveInvertY(),
+                machineWidth, machineHeight,
+                dataRotation, contentBoundsArray());
+        motor[0] += alignOffsetX;
+        motor[1] += alignOffsetY;
+        return physicalToScreen(motor[0], motor[1]);
     }
 
     // ----- Painting -----
@@ -550,7 +356,7 @@ public class VisualizationPanel extends JPanel {
         g2.setStroke(new BasicStroke((float) (1.5 / scale)));
         g2.draw(new java.awt.geom.Rectangle2D.Double(0, 0, dw, dh));
 
-        // --- Draw Origin Marker (Physical 0,0 = Screen Top-Right) ---
+        // --- Draw Origin Marker ---
         double[] originScreen = physicalToScreen(0, 0);
         g2.setColor(Color.ORANGE);
         double markerR = 5 / scale;
@@ -564,17 +370,15 @@ public class VisualizationPanel extends JPanel {
         g2.setStroke(new BasicStroke((float) (2.0 / scale)));
         double axisLen = Math.min(machineWidth, machineHeight) * 0.15;
 
-        // X-Axis (Physical +X = Left, so Screen -X = Left from origin)
         double[] xAxisEnd = physicalToScreen(axisLen, 0);
         g2.setColor(Color.RED);
         g2.draw(new java.awt.geom.Line2D.Double(originScreen[0], originScreen[1], xAxisEnd[0], xAxisEnd[1]));
-        g2.drawString("X", (float) (xAxisEnd[0] - 10 / scale), (float) (xAxisEnd[1] + 15 / scale));
+        g2.drawString("+X", (float) (xAxisEnd[0] - 10 / scale), (float) (xAxisEnd[1] + 15 / scale));
 
-        // Y-Axis (Physical +Y = Down, so Screen +Y = Down from origin)
         double[] yAxisEnd = physicalToScreen(0, axisLen);
         g2.setColor(Color.GREEN);
         g2.draw(new java.awt.geom.Line2D.Double(originScreen[0], originScreen[1], yAxisEnd[0], yAxisEnd[1]));
-        g2.drawString("Y", (float) (yAxisEnd[0] + 5 / scale), (float) (yAxisEnd[1] + 5 / scale));
+        g2.drawString("+Y", (float) (yAxisEnd[0] + 5 / scale), (float) (yAxisEnd[1] + 5 / scale));
 
         // --- Draw Refill Stations ---
         for (Station station : stations) {
@@ -631,16 +435,15 @@ public class VisualizationPanel extends JPanel {
         g2.setColor(new Color(180, 180, 180));
         g2.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
         g2.drawString(String.format(
-                "PhysPos: %.1f, %.1f | Align: %s | Rot: %d | Origin: %s | %s | FlipY: %s",
+                "Pos: %.1f, %.1f | Align: %s | Rot: %d | Origin: %s | %s",
                 currentX, currentY, canvasAlignment, dataRotation,
-                machineOrigin, orientation, flipY ? "Y" : "N"), 10, h - 10);
+                machineOrigin, orientation), 10, h - 10);
         g2.drawString(String.format(
-                "Bed: %.0fx%.0f | Offset: %.1f, %.1f | EffSwap: %s EffInvX: %s EffInvY: %s | AxisSwap: %s",
+                "Bed: %.0fx%.0f | Offset: %.1f, %.1f | Swap: %s InvX: %s InvY: %s",
                 machineWidth, machineHeight, alignOffsetX, alignOffsetY,
                 effectiveSwap() ? "Y" : "N",
                 effectiveInvertX() ? "Y" : "N",
-                effectiveInvertY() ? "Y" : "N",
-                needsAxisSwap() ? "Y" : "N"), 10, h - 24);
+                effectiveInvertY() ? "Y" : "N"), 10, h - 24);
     }
 
     // ----- Internal Types -----
