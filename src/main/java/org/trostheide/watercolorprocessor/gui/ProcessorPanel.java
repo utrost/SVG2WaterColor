@@ -27,6 +27,7 @@ public class ProcessorPanel extends JPanel {
     private final JProgressBar progressBar;
 
     private boolean updatingPreset = false;
+    private double aspectRatio = 1.0;
 
     public ProcessorPanel(JTextArea statusArea) {
 
@@ -134,7 +135,7 @@ public class ProcessorPanel extends JPanel {
         pg.gridx = 1; pg.weightx = 0.3;
         targetWidthSpinner = new JSpinner(new SpinnerNumberModel(0.0, 0.0, 10000.0, 10.0));
         targetWidthSpinner.setToolTipText("Target width in mm (0 = original size)");
-        targetWidthSpinner.addChangeListener(e -> onSizeChanged());
+        targetWidthSpinner.addChangeListener(e -> onWidthChanged());
         sizePanel.add(targetWidthSpinner, pg);
 
         pg.gridx = 2; pg.weightx = 0;
@@ -143,7 +144,7 @@ public class ProcessorPanel extends JPanel {
         pg.gridx = 3; pg.weightx = 0.3;
         targetHeightSpinner = new JSpinner(new SpinnerNumberModel(0.0, 0.0, 10000.0, 10.0));
         targetHeightSpinner.setToolTipText("Target height in mm (0 = original size)");
-        targetHeightSpinner.addChangeListener(e -> onSizeChanged());
+        targetHeightSpinner.addChangeListener(e -> onHeightChanged());
         sizePanel.add(targetHeightSpinner, pg);
 
         // Row 1: Position X + Y
@@ -220,6 +221,7 @@ public class ProcessorPanel extends JPanel {
         if (w > 0 && h > 0) {
             targetWidthSpinner.setValue(w);
             targetHeightSpinner.setValue(h);
+            aspectRatio = w / h;
         } else if ("None".equals(preset)) {
             targetWidthSpinner.setValue(0.0);
             targetHeightSpinner.setValue(0.0);
@@ -228,12 +230,34 @@ public class ProcessorPanel extends JPanel {
         updatingPreset = false;
     }
 
-    private void onSizeChanged() {
-        if (!updatingPreset) {
-            updatingPreset = true;
-            presetCombo.setSelectedItem("Custom");
-            updatingPreset = false;
+    private void onWidthChanged() {
+        if (updatingPreset) return;
+        updatingPreset = true;
+        presetCombo.setSelectedItem("Custom");
+        if (keepAspectCheckBox.isSelected()) {
+            double w = (Double) targetWidthSpinner.getValue();
+            double h = (Double) targetHeightSpinner.getValue();
+            if (aspectRatio > 0 && w > 0) {
+                targetHeightSpinner.setValue(Math.round(w / aspectRatio * 10.0) / 10.0);
+            }
+            if (w > 0 && h > 0) aspectRatio = w / h;
         }
+        updatingPreset = false;
+    }
+
+    private void onHeightChanged() {
+        if (updatingPreset) return;
+        updatingPreset = true;
+        presetCombo.setSelectedItem("Custom");
+        if (keepAspectCheckBox.isSelected()) {
+            double w = (Double) targetWidthSpinner.getValue();
+            double h = (Double) targetHeightSpinner.getValue();
+            if (aspectRatio > 0 && h > 0) {
+                targetWidthSpinner.setValue(Math.round(h * aspectRatio * 10.0) / 10.0);
+            }
+            if (w > 0 && h > 0) aspectRatio = w / h;
+        }
+        updatingPreset = false;
     }
 
     private JLabel label(String text) {

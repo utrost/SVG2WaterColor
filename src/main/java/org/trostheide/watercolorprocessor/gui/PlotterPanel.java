@@ -1,5 +1,10 @@
 package org.trostheide.watercolorprocessor.gui;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.TitledBorder;
@@ -256,9 +261,15 @@ public class PlotterPanel extends JPanel {
         stopButton.setEnabled(false);
         stopButton.addActionListener(e -> stopProcess());
 
+        JButton resetViewBtn = new JButton("Reset Position");
+        resetViewBtn.setPreferredSize(new Dimension(130, 36));
+        resetViewBtn.putClientProperty("JButton.buttonType", "roundRect");
+        resetViewBtn.addActionListener(e -> visPanel.resetOverlay());
+
         controlPanel.add(startButton);
         controlPanel.add(inputButton);
         controlPanel.add(stopButton);
+        controlPanel.add(resetViewBtn);
 
         add(controlPanel, BorderLayout.SOUTH);
 
@@ -315,6 +326,21 @@ public class PlotterPanel extends JPanel {
 
         // Auto-save config so driver sees latest changes
         settingsPanel.saveConfigSilent();
+
+        // Apply visual overlay transform to JSON if user has dragged/resized
+        if (visPanel.hasOverlayTransform()) {
+            try {
+                jsonFile = applyOverlayToJson(jsonFile,
+                        visPanel.getOverlayScale(), visPanel.getOverlayOffsetX(), visPanel.getOverlayOffsetY());
+                jsonField.setText(jsonFile.getAbsolutePath());
+                appendToConsole("Applied visual transform: scale=" +
+                        String.format("%.2f", visPanel.getOverlayScale()) +
+                        " offset=(" + String.format("%.1f, %.1f", visPanel.getOverlayOffsetX(), visPanel.getOverlayOffsetY()) + ")");
+                visPanel.resetOverlay();
+            } catch (Exception ex) {
+                appendToConsole("Warning: could not apply visual transform: " + ex.getMessage());
+            }
+        }
 
         // Reload vis just in case
         visPanel.loadFromJson(jsonFile);
@@ -641,5 +667,68 @@ public class PlotterPanel extends JPanel {
         if (win instanceof MainFrame) {
             ((MainFrame) win).setConnectionStatus(connected);
         }
+    }
+
+    private File applyOverlayToJson(File original, double scale, double offsetX, double offsetY) throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode root = mapper.readTree(original);
+
+        // Find content bounds for scale-around-center
+        double minX = Double.MAX_VALUE, maxX = -Double.MAX_VALUE;
+        double minY = Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
+
+        for (JsonNode layer : root.get("layers")) {
+            for (JsonNode cmd : layer.get("commands")) {
+                if ("DRAW".equals(cmd.get("op").asText())) {
+                    for (JsonNode p : cmd.get("points")) {
+                        double x = p.get("x").asDouble();
+                        double y = p.get("y").asDouble();
+                        minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+                        minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+                    }
+                } else if ("MOVE".equals(cmd.get("op").asText())) {
+                    double x = cmd.get("x").asDouble();
+                    double y = cmd.get("y").asDouble();
+                    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+                    minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+                }
+            }
+        }
+
+        double cx = (minX + maxX) / 2.0;
+        double cy = (minY + maxY) / 2.0;
+
+        // Transform all coordinates
+        for (JsonNode layer : root.get("layers")) {
+            for (JsonNode cmd : layer.get("commands")) {
+                if ("DRAW".equals(cmd.get("op").asText())) {
+                    for (JsonNode p : cmd.get("points")) {
+                        double x = (p.get("x").asDouble() - cx) * scale + cx + offsetX;
+                        double y = (p.get("y").asDouble() - cy) * scale + cy + offsetY;
+                        ((ObjectNode) p).put("x", x);
+                        ((ObjectNode) p).put("y", y);
+                    }
+                } else if ("MOVE".equals(cmd.get("op").asText())) {
+                    double x = (cmd.get("x").asDouble() - cx) * scale + cx + offsetX;
+                    double y = (cmd.get("y").asDouble() - cy) * scale + cy + offsetY;
+                    ((ObjectNode) cmd).put("x", x);
+                    ((ObjectNode) cmd).put("y", y);
+                }
+            }
+        }
+
+        // Update bounds in metadata
+        if (root.has("metadata") && ((ObjectNode) root.get("metadata")).has("bounds")) {
+            ObjectNode bounds = (ObjectNode) root.get("metadata").get("bounds");
+            bounds.put("minX", (bounds.get("minX").asDouble() - cx) * scale + cx + offsetX);
+            bounds.put("maxX", (bounds.get("maxX").asDouble() - cx) * scale + cx + offsetX);
+            bounds.put("minY", (bounds.get("minY").asDouble() - cy) * scale + cy + offsetY);
+            bounds.put("maxY", (bounds.get("maxY").asDouble() - cy) * scale + cy + offsetY);
+        }
+
+        File transformed = File.createTempFile("transformed_", ".json");
+        transformed.deleteOnExit();
+        mapper.writerWithDefaultPrettyPrinter().writeValue(transformed, root);
+        return transformed;
     }
 }

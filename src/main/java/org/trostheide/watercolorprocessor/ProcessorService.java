@@ -70,10 +70,18 @@ public class ProcessorService {
         boolean hasPosition = posX != 0 || posY != 0;
 
         try {
-            // 1. Load SVG
-            String parser = XMLResourceDescriptor.getXMLParserClassName();
-            SAXSVGDocumentFactory f = new SAXSVGDocumentFactory(parser);
-            Document doc = f.createDocument(inputFile.toURI().toString());
+            // 1. Load SVG (try strict SVG DOM first, fall back to generic XML for non-standard elements)
+            Document doc;
+            try {
+                String parser = XMLResourceDescriptor.getXMLParserClassName();
+                SAXSVGDocumentFactory f = new SAXSVGDocumentFactory(parser);
+                doc = f.createDocument(inputFile.toURI().toString());
+            } catch (org.w3c.dom.DOMException e) {
+                logger.warn("Strict SVG parser failed ({}), retrying with generic XML parser.", e.getMessage());
+                javax.xml.parsers.DocumentBuilderFactory dbf = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+                dbf.setNamespaceAware(true);
+                doc = dbf.newDocumentBuilder().parse(inputFile);
+            }
 
             // 2. Identify Layers
             List<LayerProcessingContext> layersToProcess = identifyLayers(doc, defaultStationId);
