@@ -50,13 +50,24 @@ public class ProcessorService {
 
     public void process(File inputFile, File outputFile, double maxDrawDistance, String defaultStationId,
             double curveApproximation, String fitToFormatStr, double padding, boolean mirror) {
-        logger.info("Starting processing for: {}", inputFile.getName());
-        this.commandCounter = 1; // Reset for each processing run
-
-        PaperFormat fitToFormat = PaperFormat.fromString(fitToFormatStr);
-        if (fitToFormatStr != null && fitToFormat == null) {
-            logger.warn("Unknown paper format '{}'. Skipping auto-scaling.", fitToFormatStr);
+        PaperFormat fmt = PaperFormat.fromString(fitToFormatStr);
+        double targetW = 0, targetH = 0;
+        if (fmt != null) {
+            targetW = fmt.width() - padding * 2;
+            targetH = fmt.height() - padding * 2;
         }
+        process(inputFile, outputFile, maxDrawDistance, defaultStationId,
+                curveApproximation, targetW, targetH, true, 0, 0, mirror);
+    }
+
+    public void process(File inputFile, File outputFile, double maxDrawDistance, String defaultStationId,
+            double curveApproximation, double targetWidth, double targetHeight, boolean keepAspectRatio,
+            double posX, double posY, boolean mirror) {
+        logger.info("Starting processing for: {}", inputFile.getName());
+        this.commandCounter = 1;
+
+        boolean hasTargetSize = targetWidth > 0 && targetHeight > 0;
+        boolean hasPosition = posX != 0 || posY != 0;
 
         try {
             // 1. Load SVG
@@ -67,30 +78,31 @@ public class ProcessorService {
             // 2. Identify Layers
             List<LayerProcessingContext> layersToProcess = identifyLayers(doc, defaultStationId);
 
-            // 3. Pre-scan for bounds (if auto-scaling or mirroring is active)
+            // 3. Pre-scan for bounds (if scaling, positioning, or mirroring)
             AffineTransform globalTx = new AffineTransform();
             Bounds preScannedBounds = null;
 
-            if (fitToFormat != null || mirror) {
+            if (hasTargetSize || hasPosition || mirror) {
                 preScannedBounds = calculateGlobalBounds(layersToProcess);
             }
 
-            if (fitToFormat != null && preScannedBounds != null) {
-                globalTx = calculateFitToPageTransform(preScannedBounds, fitToFormat, padding);
+            if (hasTargetSize && preScannedBounds != null) {
+                globalTx = calculateScaleTransform(preScannedBounds, targetWidth, targetHeight,
+                        keepAspectRatio, posX, posY);
+            } else if (hasPosition && preScannedBounds != null) {
+                globalTx.translate(posX - preScannedBounds.minX(), posY - preScannedBounds.minY());
             }
 
             // Mirror Logic
             if (mirror) {
-                double pivotX = 0;
-                if (fitToFormat != null) {
-                    // Mirror around the center of the PAGE
-                    pivotX = fitToFormat.width() / 2.0;
+                double pivotX;
+                if (hasTargetSize) {
+                    pivotX = posX + targetWidth / 2.0;
                 } else if (preScannedBounds != null) {
-                    // Mirror around the center of the DRAWING (keep position relative to center)
                     pivotX = (preScannedBounds.minX() + preScannedBounds.maxX()) / 2.0;
+                } else {
+                    pivotX = 0;
                 }
-
-                // Flip X around pivotX: x' = pivot + (pivot - x) = 2*pivot - x
                 AffineTransform mirrorTx = new AffineTransform(-1, 0, 0, 1, 2 * pivotX, 0);
                 globalTx.preConcatenate(mirrorTx);
             }
@@ -526,6 +538,40 @@ public class ProcessorService {
             }
         }
         return builder.build();
+    }
+
+    AffineTransform calculateScaleTransform(Bounds contentBounds,
+            double targetWidth, double targetHeight, boolean keepAspectRatio,
+            double posX, double posY) {
+        if (contentBounds.minX() == Double.MAX_VALUE)
+            return new AffineTransform();
+
+        double contentWidth = contentBounds.maxX() - contentBounds.minX();
+        double contentHeight = contentBounds.maxY() - contentBounds.minY();
+
+        double scaleX = targetWidth / contentWidth;
+        double scaleY = targetHeight / contentHeight;
+
+        if (keepAspectRatio) {
+            double scale = Math.min(scaleX, scaleY);
+            scaleX = scale;
+            scaleY = scale;
+        }
+
+        double scaledWidth = contentWidth * scaleX;
+        double scaledHeight = contentHeight * scaleY;
+        double centerOffsetX = (targetWidth - scaledWidth) / 2.0;
+        double centerOffsetY = (targetHeight - scaledHeight) / 2.0;
+
+        logger.info("Scale Transform: Content={}x{}, Target={}x{}, Scale=({}, {}), Pos=({}, {})",
+                contentWidth, contentHeight, targetWidth, targetHeight, scaleX, scaleY, posX, posY);
+
+        AffineTransform tx = new AffineTransform();
+        tx.translate(posX + centerOffsetX, posY + centerOffsetY);
+        tx.scale(scaleX, scaleY);
+        tx.translate(-contentBounds.minX(), -contentBounds.minY());
+
+        return tx;
     }
 
     // Package-private for testability

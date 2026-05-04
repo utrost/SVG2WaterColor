@@ -13,14 +13,19 @@ public class SvgDrawPanel extends JPanel {
 
     private final JTextField svgField;
     private final JSpinner curveStepSpinner;
-    private final JComboBox<String> formatCombo;
-    private final JSpinner paddingSpinner;
+    private final JSpinner targetWidthSpinner;
+    private final JSpinner targetHeightSpinner;
+    private final JCheckBox keepAspectCheckBox;
+    private final JSpinner posXSpinner;
+    private final JSpinner posYSpinner;
+    private final JComboBox<String> presetCombo;
     private final JCheckBox mirrorCheckBox;
     private final JButton convertButton;
     private final JTextArea logArea;
     private final JProgressBar progressBar;
     private final SettingsPanel settingsPanel;
 
+    private boolean updatingPreset = false;
     private Consumer<File> onJsonReady;
 
     public SvgDrawPanel(SettingsPanel settingsPanel) {
@@ -28,11 +33,10 @@ public class SvgDrawPanel extends JPanel {
         setLayout(new BorderLayout(0, 8));
         setBorder(new EmptyBorder(12, 12, 12, 12));
 
-        // === Top: Settings ===
         JPanel topPanel = new JPanel();
         topPanel.setLayout(new BoxLayout(topPanel, BoxLayout.Y_AXIS));
 
-        // File selection
+        // --- File Selection ---
         JPanel filePanel = new JPanel(new GridBagLayout());
         filePanel.setBorder(createSection("SVG Input"));
         GridBagConstraints gbc = new GridBagConstraints();
@@ -55,48 +59,80 @@ public class SvgDrawPanel extends JPanel {
         topPanel.add(filePanel);
         topPanel.add(Box.createVerticalStrut(4));
 
-        // Drawing settings
-        JPanel drawSettings = new JPanel(new GridBagLayout());
-        drawSettings.setBorder(createSection("Drawing Settings"));
-        GridBagConstraints sgbc = new GridBagConstraints();
-        sgbc.insets = new Insets(4, 8, 4, 8);
-        sgbc.fill = GridBagConstraints.HORIZONTAL;
-        sgbc.anchor = GridBagConstraints.WEST;
+        // --- Size & Position ---
+        JPanel sizePanel = new JPanel(new GridBagLayout());
+        sizePanel.setBorder(createSection("Size & Position (mm)"));
+        GridBagConstraints sg = new GridBagConstraints();
+        sg.insets = new Insets(4, 8, 4, 8);
+        sg.fill = GridBagConstraints.HORIZONTAL;
+        sg.anchor = GridBagConstraints.WEST;
 
-        sgbc.gridx = 0; sgbc.gridy = 0; sgbc.weightx = 0;
-        drawSettings.add(label("Curve Step (mm)"), sgbc);
+        // Row 0: Preset + Curve Step
+        sg.gridx = 0; sg.gridy = 0; sg.weightx = 0;
+        sizePanel.add(label("Preset"), sg);
 
-        sgbc.gridx = 1; sgbc.weightx = 0.4;
+        sg.gridx = 1; sg.weightx = 0.3;
+        presetCombo = new JComboBox<>(new String[]{"Machine", "A5 (148x210)", "A4 (210x297)", "A3 (297x420)", "Custom"});
+        presetCombo.addActionListener(e -> applyPreset());
+        sizePanel.add(presetCombo, sg);
+
+        sg.gridx = 2; sg.weightx = 0;
+        sizePanel.add(label("Curve Step"), sg);
+
+        sg.gridx = 3; sg.weightx = 0.3;
         curveStepSpinner = new JSpinner(new SpinnerNumberModel(0.05, 0.001, 10.0, 0.01));
         curveStepSpinner.setToolTipText("Resolution for linearizing curves (smaller = smoother)");
-        drawSettings.add(curveStepSpinner, sgbc);
+        sizePanel.add(curveStepSpinner, sg);
 
-        sgbc.gridx = 2; sgbc.weightx = 0;
-        drawSettings.add(label("Fit to"), sgbc);
+        // Row 1: Width + Height
+        sg.gridx = 0; sg.gridy = 1; sg.weightx = 0;
+        sizePanel.add(label("Width"), sg);
 
-        sgbc.gridx = 3; sgbc.weightx = 0.4;
-        formatCombo = new JComboBox<>(new String[]{"None", "Machine", "A5", "A4", "A3", "XL"});
-        formatCombo.setSelectedItem("Machine");
-        formatCombo.setToolTipText("Auto-scale: 'Machine' uses current machine bed dimensions from settings");
-        drawSettings.add(formatCombo, sgbc);
+        sg.gridx = 1; sg.weightx = 0.3;
+        targetWidthSpinner = new JSpinner(new SpinnerNumberModel(0.0, 0.0, 10000.0, 10.0));
+        targetWidthSpinner.setToolTipText("Target width in mm (0 = original size)");
+        targetWidthSpinner.addChangeListener(e -> onSizeChanged());
+        sizePanel.add(targetWidthSpinner, sg);
 
-        sgbc.gridx = 0; sgbc.gridy = 1; sgbc.weightx = 0;
-        drawSettings.add(label("Padding (mm)"), sgbc);
+        sg.gridx = 2; sg.weightx = 0;
+        sizePanel.add(label("Height"), sg);
 
-        sgbc.gridx = 1; sgbc.weightx = 0.4;
-        paddingSpinner = new JSpinner(new SpinnerNumberModel(10.0, 0.0, 100.0, 1.0));
-        paddingSpinner.setToolTipText("Margin when auto-scaling to a paper format");
-        drawSettings.add(paddingSpinner, sgbc);
+        sg.gridx = 3; sg.weightx = 0.3;
+        targetHeightSpinner = new JSpinner(new SpinnerNumberModel(0.0, 0.0, 10000.0, 10.0));
+        targetHeightSpinner.setToolTipText("Target height in mm (0 = original size)");
+        targetHeightSpinner.addChangeListener(e -> onSizeChanged());
+        sizePanel.add(targetHeightSpinner, sg);
 
-        sgbc.gridx = 2; sgbc.weightx = 0; sgbc.gridwidth = 2;
+        // Row 2: Position X + Y
+        sg.gridx = 0; sg.gridy = 2; sg.weightx = 0;
+        sizePanel.add(label("Pos X"), sg);
+
+        sg.gridx = 1; sg.weightx = 0.3;
+        posXSpinner = new JSpinner(new SpinnerNumberModel(0.0, 0.0, 10000.0, 1.0));
+        posXSpinner.setToolTipText("X position on the machine bed in mm (from origin)");
+        sizePanel.add(posXSpinner, sg);
+
+        sg.gridx = 2; sg.weightx = 0;
+        sizePanel.add(label("Pos Y"), sg);
+
+        sg.gridx = 3; sg.weightx = 0.3;
+        posYSpinner = new JSpinner(new SpinnerNumberModel(0.0, 0.0, 10000.0, 1.0));
+        posYSpinner.setToolTipText("Y position on the machine bed in mm (from origin)");
+        sizePanel.add(posYSpinner, sg);
+
+        // Row 3: Options
+        sg.gridx = 0; sg.gridy = 3; sg.weightx = 0; sg.gridwidth = 2;
+        keepAspectCheckBox = new JCheckBox("Keep Aspect Ratio", true);
+        sizePanel.add(keepAspectCheckBox, sg);
+
+        sg.gridx = 2; sg.gridwidth = 2;
         mirrorCheckBox = new JCheckBox("Mirror Horizontally");
-        mirrorCheckBox.setToolTipText("Flip the design along the X axis before processing");
-        drawSettings.add(mirrorCheckBox, sgbc);
+        sizePanel.add(mirrorCheckBox, sg);
 
-        topPanel.add(drawSettings);
+        topPanel.add(sizePanel);
         topPanel.add(Box.createVerticalStrut(8));
 
-        // Action bar
+        // --- Action Bar ---
         JPanel actionBar = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 4));
         convertButton = new JButton("Convert & Plot");
         convertButton.setFont(convertButton.getFont().deriveFont(Font.BOLD, 14f));
@@ -122,10 +158,47 @@ public class SvgDrawPanel extends JPanel {
         JScrollPane scrollPane = new JScrollPane(logArea);
         scrollPane.setBorder(createSection("Conversion Log"));
         add(scrollPane, BorderLayout.CENTER);
+
+        // Apply initial preset
+        applyPreset();
     }
 
     public void setOnJsonReady(Consumer<File> callback) {
         this.onJsonReady = callback;
+    }
+
+    private void applyPreset() {
+        if (updatingPreset) return;
+        updatingPreset = true;
+
+        String preset = (String) presetCombo.getSelectedItem();
+        double w = 0, h = 0;
+
+        if ("Machine".equals(preset)) {
+            w = settingsPanel.getMachineWidth();
+            h = settingsPanel.getMachineHeight();
+        } else if (preset != null && preset.startsWith("A5")) {
+            w = 148; h = 210;
+        } else if (preset != null && preset.startsWith("A4")) {
+            w = 210; h = 297;
+        } else if (preset != null && preset.startsWith("A3")) {
+            w = 297; h = 420;
+        }
+
+        if (w > 0 && h > 0) {
+            targetWidthSpinner.setValue(w);
+            targetHeightSpinner.setValue(h);
+        }
+
+        updatingPreset = false;
+    }
+
+    private void onSizeChanged() {
+        if (!updatingPreset) {
+            updatingPreset = true;
+            presetCombo.setSelectedItem("Custom");
+            updatingPreset = false;
+        }
     }
 
     private void selectSvgFile() {
@@ -160,33 +233,32 @@ public class SvgDrawPanel extends JPanel {
         progressBar.setIndeterminate(true);
         progressBar.setVisible(true);
 
-        String selectedFormat = (String) formatCombo.getSelectedItem();
-        if ("None".equals(selectedFormat)) {
-            selectedFormat = null;
-        } else if ("Machine".equals(selectedFormat)) {
-            double mw = settingsPanel.getMachineWidth();
-            double mh = settingsPanel.getMachineHeight();
-            selectedFormat = String.format(java.util.Locale.US, "%.0fx%.0f", mw, mh);
-        }
-
         double curveStep = (Double) curveStepSpinner.getValue();
-        double padding = (Double) paddingSpinner.getValue();
+        double targetW = (Double) targetWidthSpinner.getValue();
+        double targetH = (Double) targetHeightSpinner.getValue();
+        boolean keepAspect = keepAspectCheckBox.isSelected();
+        double posX = (Double) posXSpinner.getValue();
+        double posY = (Double) posYSpinner.getValue();
         boolean mirror = mirrorCheckBox.isSelected();
-        String format = selectedFormat;
 
         new SwingWorker<File, String>() {
             @Override
             protected File doInBackground() throws Exception {
                 publish("Converting SVG for pen drawing (no refills)...");
-                publish("Input: " + svgFile.getAbsolutePath());
+                publish(String.format("Input: %s", svgFile.getAbsolutePath()));
+                if (targetW > 0 && targetH > 0) {
+                    publish(String.format(java.util.Locale.US,
+                            "Target: %.0f x %.0f mm at (%.0f, %.0f)", targetW, targetH, posX, posY));
+                }
 
                 File tempJson = File.createTempFile("svgdraw_", ".json");
                 tempJson.deleteOnExit();
 
                 ProcessorService service = new ProcessorService();
-                service.process(svgFile, tempJson, 0, "pen", curveStep, format, padding, mirror);
+                service.process(svgFile, tempJson, 0, "pen",
+                        curveStep, targetW, targetH, keepAspect, posX, posY, mirror);
 
-                publish("Conversion complete: " + tempJson.getAbsolutePath());
+                publish("Conversion complete.");
                 return tempJson;
             }
 
