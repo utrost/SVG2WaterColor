@@ -6,8 +6,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
+import java.awt.event.*;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.Path2D;
+import java.awt.geom.Rectangle2D;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,6 +57,38 @@ public class VisualizationPanel extends JPanel {
     private String machineOrigin = "Top-Right";
     private boolean flipY = false;
 
+    // Overlay transform for interactive drag/resize (in raw content space)
+    private double overlayOffsetX = 0, overlayOffsetY = 0;
+    private double overlayScale = 1.0;
+
+    // Cached paint-time values for screen-to-mm inversion
+    private double paintScale = 1.0;
+    private double paintTx = 0, paintTy = 0;
+
+    // Interactive drag state
+    private static final int HANDLE_NONE = -1;
+    private static final int HANDLE_MOVE = 0;
+    private static final int HANDLE_NW = 1, HANDLE_N = 2, HANDLE_NE = 3;
+    private static final int HANDLE_W = 4, HANDLE_E = 5;
+    private static final int HANDLE_SW = 6, HANDLE_S = 7, HANDLE_SE = 8;
+    private static final double HANDLE_SIZE_PX = 7;
+
+    private int dragHandle = HANDLE_NONE;
+    private double dragStartScreenX, dragStartScreenY;
+    private double dragStartOverlayOX, dragStartOverlayOY;
+    private double dragStartOverlayScale;
+
+    // Listener for overlay changes (notifies PlotterPanel)
+    private Runnable overlayChangeListener;
+
+    public void setOverlayChangeListener(Runnable listener) {
+        this.overlayChangeListener = listener;
+    }
+
+    private void fireOverlayChange() {
+        if (overlayChangeListener != null) overlayChangeListener.run();
+    }
+
     // Refill Stations (loaded from config)
     public record Station(String name, double x, double y) {
     }
@@ -65,6 +99,23 @@ public class VisualizationPanel extends JPanel {
         this.stations.clear();
         this.stations.addAll(newStations);
         repaint();
+    }
+
+    // ----- Overlay accessors -----
+
+    public double getOverlayOffsetX() { return overlayOffsetX; }
+    public double getOverlayOffsetY() { return overlayOffsetY; }
+    public double getOverlayScale() { return overlayScale; }
+    public boolean hasOverlayTransform() {
+        return overlayOffsetX != 0 || overlayOffsetY != 0 || overlayScale != 1.0;
+    }
+
+    public void resetOverlay() {
+        overlayOffsetX = 0;
+        overlayOffsetY = 0;
+        overlayScale = 1.0;
+        repaint();
+        fireOverlayChange();
     }
 
     // ----- Setters -----
@@ -144,6 +195,53 @@ public class VisualizationPanel extends JPanel {
         TitledBorder border = BorderFactory.createTitledBorder("Live View");
         border.setTitleFont(border.getTitleFont().deriveFont(Font.BOLD, 12f));
         setBorder(border);
+
+        MouseAdapter mouseHandler = new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (allPaths.isEmpty()) return;
+                int handle = hitTestHandle(e.getX(), e.getY());
+                if (handle == HANDLE_NONE) return;
+                dragHandle = handle;
+                dragStartScreenX = e.getX();
+                dragStartScreenY = e.getY();
+                dragStartOverlayOX = overlayOffsetX;
+                dragStartOverlayOY = overlayOffsetY;
+                dragStartOverlayScale = overlayScale;
+            }
+
+            @Override
+            public void mouseDragged(MouseEvent e) {
+                if (dragHandle == HANDLE_NONE) return;
+                double dx = e.getX() - dragStartScreenX;
+                double dy = e.getY() - dragStartScreenY;
+                if (dragHandle == HANDLE_MOVE) {
+                    double[] mmDelta = screenDeltaToMm(dx, dy);
+                    overlayOffsetX = dragStartOverlayOX + mmDelta[0];
+                    overlayOffsetY = dragStartOverlayOY + mmDelta[1];
+                } else {
+                    handleResize(dragHandle, dx, dy);
+                }
+                repaint();
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (dragHandle != HANDLE_NONE) {
+                    dragHandle = HANDLE_NONE;
+                    fireOverlayChange();
+                }
+            }
+
+            @Override
+            public void mouseMoved(MouseEvent e) {
+                if (allPaths.isEmpty()) { setCursor(Cursor.getDefaultCursor()); return; }
+                int handle = hitTestHandle(e.getX(), e.getY());
+                setCursor(cursorForHandle(handle));
+            }
+        };
+        addMouseListener(mouseHandler);
+        addMouseMotionListener(mouseHandler);
     }
 
     // ----- Data Loading -----
@@ -152,6 +250,9 @@ public class VisualizationPanel extends JPanel {
         allPaths.clear();
         currentX = 0;
         currentY = 0;
+        overlayOffsetX = 0;
+        overlayOffsetY = 0;
+        overlayScale = 1.0;
 
         try {
             JsonNode root = mapper.readTree(jsonFile);
@@ -308,10 +409,16 @@ public class VisualizationPanel extends JPanel {
     /**
      * Full pipeline: Raw Point -> Screen Point
      * Uses shared CoordinateTransform (same math as driver/transforms.py).
+     * Overlay transform (scale + offset) is applied in raw content space before the driver pipeline.
      */
     private double[] transformPoint(Point2D rawPoint) {
+        double cx = (rawMinX + rawMaxX) / 2.0;
+        double cy = (rawMinY + rawMaxY) / 2.0;
+        double x = (rawPoint.x() - cx) * overlayScale + cx + overlayOffsetX;
+        double y = (rawPoint.y() - cy) * overlayScale + cy + overlayOffsetY;
+
         double[] motor = CoordinateTransform.transformPoint(
-                rawPoint.x(), rawPoint.y(),
+                x, y,
                 effectiveSwap(), effectiveInvertX(), effectiveInvertY(),
                 machineWidth, machineHeight,
                 dataRotation, contentBoundsArray());
@@ -344,6 +451,10 @@ public class VisualizationPanel extends JPanel {
         // Center the displayed bed in the panel
         double tx = 20 + (w - 40 - dw * scale) / 2.0;
         double ty = 20 + (h - 40 - dh * scale) / 2.0;
+
+        this.paintScale = scale;
+        this.paintTx = tx;
+        this.paintTy = ty;
 
         AffineTransform old = g2.getTransform();
         g2.translate(tx, ty);
@@ -414,6 +525,40 @@ public class VisualizationPanel extends JPanel {
             g2.draw(p2d);
         }
 
+        // --- Draw Interactive Bounding Box ---
+        if (!allPaths.isEmpty()) {
+            // Transform raw content corners through the full pipeline
+            Point2D[] corners = {
+                new Point2D(rawMinX, rawMinY), new Point2D(rawMaxX, rawMinY),
+                new Point2D(rawMinX, rawMaxY), new Point2D(rawMaxX, rawMaxY)
+            };
+            double sMinX = Double.MAX_VALUE, sMinY = Double.MAX_VALUE;
+            double sMaxX = -Double.MAX_VALUE, sMaxY = -Double.MAX_VALUE;
+            for (Point2D c : corners) {
+                double[] sc = transformPoint(c);
+                sMinX = Math.min(sMinX, sc[0]); sMaxX = Math.max(sMaxX, sc[0]);
+                sMinY = Math.min(sMinY, sc[1]); sMaxY = Math.max(sMaxY, sc[1]);
+            }
+
+            g2.setColor(new Color(255, 200, 50, 120));
+            float[] dash = {(float)(6 / scale), (float)(4 / scale)};
+            g2.setStroke(new BasicStroke((float)(1.5 / scale), BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10, dash, 0));
+            g2.draw(new Rectangle2D.Double(sMinX, sMinY, sMaxX - sMinX, sMaxY - sMinY));
+
+            double hs = HANDLE_SIZE_PX / scale;
+            double midX = (sMinX + sMaxX) / 2, midY = (sMinY + sMaxY) / 2;
+            double[][] handlePos = {
+                {sMinX, sMinY}, {midX, sMinY}, {sMaxX, sMinY},
+                {sMinX, midY}, {sMaxX, midY},
+                {sMinX, sMaxY}, {midX, sMaxY}, {sMaxX, sMaxY}
+            };
+            g2.setColor(new Color(255, 200, 50));
+            g2.setStroke(new BasicStroke((float)(1.0 / scale)));
+            for (double[] hp : handlePos) {
+                g2.fill(new Rectangle2D.Double(hp[0] - hs/2, hp[1] - hs/2, hs, hs));
+            }
+        }
+
         // --- Draw Cursor (Head Position) ---
         // currentX, currentY are Physical coordinates from driver
         double[] headScreen = physicalToScreen(currentX, currentY);
@@ -438,12 +583,134 @@ public class VisualizationPanel extends JPanel {
                 "Pos: %.1f, %.1f | Align: %s | Rot: %d | Origin: %s | %s",
                 currentX, currentY, canvasAlignment, dataRotation,
                 machineOrigin, orientation), 10, h - 10);
-        g2.drawString(String.format(
-                "Bed: %.0fx%.0f | Offset: %.1f, %.1f | Swap: %s InvX: %s InvY: %s",
-                machineWidth, machineHeight, alignOffsetX, alignOffsetY,
-                effectiveSwap() ? "Y" : "N",
-                effectiveInvertX() ? "Y" : "N",
-                effectiveInvertY() ? "Y" : "N"), 10, h - 24);
+        if (hasOverlayTransform()) {
+            g2.drawString(String.format(
+                    "Drag: dX=%.1f dY=%.1f Scale=%.0f%% | Bed: %.0fx%.0f",
+                    overlayOffsetX, overlayOffsetY, overlayScale * 100,
+                    machineWidth, machineHeight), 10, h - 24);
+        } else {
+            g2.drawString(String.format(
+                    "Bed: %.0fx%.0f | Offset: %.1f, %.1f | Swap: %s InvX: %s InvY: %s",
+                    machineWidth, machineHeight, alignOffsetX, alignOffsetY,
+                    effectiveSwap() ? "Y" : "N",
+                    effectiveInvertX() ? "Y" : "N",
+                    effectiveInvertY() ? "Y" : "N"), 10, h - 24);
+        }
+    }
+
+    // ----- Interactive Drag/Resize Helpers -----
+
+    private double[] getContentScreenBoundsPixel() {
+        if (allPaths.isEmpty()) return new double[]{0, 0, 0, 0};
+        Point2D[] corners = {
+            new Point2D(rawMinX, rawMinY), new Point2D(rawMaxX, rawMinY),
+            new Point2D(rawMinX, rawMaxY), new Point2D(rawMaxX, rawMaxY)
+        };
+        double sMinX = Double.MAX_VALUE, sMinY = Double.MAX_VALUE;
+        double sMaxX = -Double.MAX_VALUE, sMaxY = -Double.MAX_VALUE;
+        for (Point2D c : corners) {
+            double[] sc = transformPoint(c);
+            // Convert from machine-space to screen pixels
+            double px = sc[0] * paintScale + paintTx;
+            double py = sc[1] * paintScale + paintTy;
+            sMinX = Math.min(sMinX, px); sMaxX = Math.max(sMaxX, px);
+            sMinY = Math.min(sMinY, py); sMaxY = Math.max(sMaxY, py);
+        }
+        return new double[]{sMinX, sMinY, sMaxX, sMaxY};
+    }
+
+    private int hitTestHandle(int mouseX, int mouseY) {
+        double[] bb = getContentScreenBoundsPixel();
+        double x0 = bb[0], y0 = bb[1], x1 = bb[2], y1 = bb[3];
+        double mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+        double ht = HANDLE_SIZE_PX + 3;
+
+        double[][] handles = {
+            {x0, y0}, {mx, y0}, {x1, y0},
+            {x0, my}, {x1, my},
+            {x0, y1}, {mx, y1}, {x1, y1}
+        };
+        int[] handleIds = {HANDLE_NW, HANDLE_N, HANDLE_NE, HANDLE_W, HANDLE_E, HANDLE_SW, HANDLE_S, HANDLE_SE};
+
+        for (int i = 0; i < handles.length; i++) {
+            if (Math.abs(mouseX - handles[i][0]) <= ht && Math.abs(mouseY - handles[i][1]) <= ht) {
+                return handleIds[i];
+            }
+        }
+
+        if (mouseX >= x0 - 2 && mouseX <= x1 + 2 && mouseY >= y0 - 2 && mouseY <= y1 + 2) {
+            return HANDLE_MOVE;
+        }
+
+        return HANDLE_NONE;
+    }
+
+    private Cursor cursorForHandle(int handle) {
+        switch (handle) {
+            case HANDLE_NW: return Cursor.getPredefinedCursor(Cursor.NW_RESIZE_CURSOR);
+            case HANDLE_NE: return Cursor.getPredefinedCursor(Cursor.NE_RESIZE_CURSOR);
+            case HANDLE_SW: return Cursor.getPredefinedCursor(Cursor.SW_RESIZE_CURSOR);
+            case HANDLE_SE: return Cursor.getPredefinedCursor(Cursor.SE_RESIZE_CURSOR);
+            case HANDLE_N:  return Cursor.getPredefinedCursor(Cursor.N_RESIZE_CURSOR);
+            case HANDLE_S:  return Cursor.getPredefinedCursor(Cursor.S_RESIZE_CURSOR);
+            case HANDLE_W:  return Cursor.getPredefinedCursor(Cursor.W_RESIZE_CURSOR);
+            case HANDLE_E:  return Cursor.getPredefinedCursor(Cursor.E_RESIZE_CURSOR);
+            case HANDLE_MOVE: return Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR);
+            default: return Cursor.getDefaultCursor();
+        }
+    }
+
+    private double[] screenDeltaToMm(double dxPx, double dyPx) {
+        // Screen pixels -> machine-space mm delta
+        // The raw content space maps through the driver transform to screen.
+        // For dragging, we need the inverse: screen delta -> raw content delta.
+        // We use finite differences: transform a small offset and measure the screen effect.
+        double cx = (rawMinX + rawMaxX) / 2.0;
+        double cy = (rawMinY + rawMaxY) / 2.0;
+        double[] base = transformPoint(new Point2D(cx, cy));
+        double[] dxRef = transformPoint(new Point2D(cx + 1, cy));
+        double[] dyRef = transformPoint(new Point2D(cx, cy + 1));
+
+        double screenPerMmX_x = (dxRef[0] - base[0]) * paintScale;
+        double screenPerMmX_y = (dxRef[1] - base[1]) * paintScale;
+        double screenPerMmY_x = (dyRef[0] - base[0]) * paintScale;
+        double screenPerMmY_y = (dyRef[1] - base[1]) * paintScale;
+
+        // Solve 2x2 system: [screenPerMmX_x, screenPerMmY_x] [mmX]   [dxPx]
+        //                    [screenPerMmX_y, screenPerMmY_y] [mmY] = [dyPx]
+        double det = screenPerMmX_x * screenPerMmY_y - screenPerMmX_y * screenPerMmY_x;
+        if (Math.abs(det) < 1e-10) return new double[]{0, 0};
+
+        double mmX = (dxPx * screenPerMmY_y - dyPx * screenPerMmY_x) / det;
+        double mmY = (screenPerMmX_x * dyPx - screenPerMmX_y * dxPx) / det;
+        return new double[]{mmX, mmY};
+    }
+
+    private void handleResize(int handle, double dxPx, double dyPx) {
+        // Compute scale change from drag distance
+        double[] bb = getContentScreenBoundsPixel();
+        double bbW = bb[2] - bb[0];
+        double bbH = bb[3] - bb[1];
+        if (bbW < 1 || bbH < 1) return;
+
+        double scaleFactorX = 1, scaleFactorY = 1;
+
+        switch (handle) {
+            case HANDLE_SE: scaleFactorX = (bbW + dxPx) / bbW; scaleFactorY = (bbH + dyPx) / bbH; break;
+            case HANDLE_NW: scaleFactorX = (bbW - dxPx) / bbW; scaleFactorY = (bbH - dyPx) / bbH; break;
+            case HANDLE_NE: scaleFactorX = (bbW + dxPx) / bbW; scaleFactorY = (bbH - dyPx) / bbH; break;
+            case HANDLE_SW: scaleFactorX = (bbW - dxPx) / bbW; scaleFactorY = (bbH + dyPx) / bbH; break;
+            case HANDLE_E:  scaleFactorX = (bbW + dxPx) / bbW; scaleFactorY = scaleFactorX; break;
+            case HANDLE_W:  scaleFactorX = (bbW - dxPx) / bbW; scaleFactorY = scaleFactorX; break;
+            case HANDLE_S:  scaleFactorY = (bbH + dyPx) / bbH; scaleFactorX = scaleFactorY; break;
+            case HANDLE_N:  scaleFactorY = (bbH - dyPx) / bbH; scaleFactorX = scaleFactorY; break;
+        }
+
+        // Use uniform scale (average) to keep aspect ratio
+        double scaleFactor = (scaleFactorX + scaleFactorY) / 2.0;
+        scaleFactor = Math.max(0.05, Math.min(scaleFactor, 20.0));
+
+        overlayScale = dragStartOverlayScale * scaleFactor;
     }
 
     // ----- Internal Types -----
