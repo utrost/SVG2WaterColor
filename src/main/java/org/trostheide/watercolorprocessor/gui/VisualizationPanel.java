@@ -61,6 +61,9 @@ public class VisualizationPanel extends JPanel {
     private double overlayOffsetX = 0, overlayOffsetY = 0;
     private double overlayScale = 1.0;
 
+    // When true, alignment offset is suppressed (content already at absolute positions)
+    private boolean suppressAlignment = false;
+
     // Cached paint-time values for screen-to-mm inversion
     private double paintScale = 1.0;
     private double paintTx = 0, paintTy = 0;
@@ -110,10 +113,17 @@ public class VisualizationPanel extends JPanel {
         return overlayOffsetX != 0 || overlayOffsetY != 0 || overlayScale != 1.0;
     }
 
+    public void setSuppressAlignment(boolean suppress) {
+        this.suppressAlignment = suppress;
+        recalculateTransform();
+        repaint();
+    }
+
     public void resetOverlay() {
         overlayOffsetX = 0;
         overlayOffsetY = 0;
         overlayScale = 1.0;
+        suppressAlignment = false;
         repaint();
         fireOverlayChange();
     }
@@ -253,6 +263,7 @@ public class VisualizationPanel extends JPanel {
         overlayOffsetX = 0;
         overlayOffsetY = 0;
         overlayScale = 1.0;
+        suppressAlignment = false;
 
         try {
             JsonNode root = mapper.readTree(jsonFile);
@@ -362,14 +373,19 @@ public class VisualizationPanel extends JPanel {
             effectiveAlign = translateAlignmentForPortrait(canvasAlignment);
         }
 
-        double[] offset = CoordinateTransform.calculateAlignmentOffset(
-                effectiveAlign, contentBoundsArray(),
-                machineWidth, machineHeight,
-                effectiveSwap(), effectiveInvertX(), effectiveInvertY(),
-                dataRotation, isOriginRight(),
-                paddingX, paddingY);
-        alignOffsetX = offset[0];
-        alignOffsetY = offset[1];
+        if (suppressAlignment) {
+            alignOffsetX = 0;
+            alignOffsetY = 0;
+        } else {
+            double[] offset = CoordinateTransform.calculateAlignmentOffset(
+                    effectiveAlign, contentBoundsArray(),
+                    machineWidth, machineHeight,
+                    effectiveSwap(), effectiveInvertX(), effectiveInvertY(),
+                    dataRotation, isOriginRight(),
+                    paddingX, paddingY);
+            alignOffsetX = offset[0];
+            alignOffsetY = offset[1];
+        }
     }
 
     /**
