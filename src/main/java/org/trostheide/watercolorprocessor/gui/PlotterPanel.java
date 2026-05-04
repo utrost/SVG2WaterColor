@@ -317,7 +317,6 @@ public class PlotterPanel extends JPanel {
         settingsPanel.saveConfigSilent();
 
         // Apply visual overlay transform to JSON if user has dragged/resized
-        boolean overlayApplied = false;
         if (visPanel.hasOverlayTransform()) {
             try {
                 jsonFile = applyOverlayToJson(jsonFile,
@@ -327,7 +326,6 @@ public class PlotterPanel extends JPanel {
                         String.format("%.2f", visPanel.getOverlayScale()) +
                         " offset=(" + String.format("%.1f, %.1f", visPanel.getOverlayOffsetX(), visPanel.getOverlayOffsetY()) + ")");
                 visPanel.resetOverlay();
-                overlayApplied = true;
             } catch (Exception ex) {
                 appendToConsole("Warning: could not apply visual transform: " + ex.getMessage());
             }
@@ -336,9 +334,6 @@ public class PlotterPanel extends JPanel {
         // Reload vis with the (possibly baked) JSON
         visPanel.loadFromJson(jsonFile);
         updateVisualSettings();
-        if (overlayApplied) {
-            visPanel.setSuppressAlignment(true);
-        }
 
         List<String> cmd = buildDriverCommand();
         cmd.add(2, jsonFile.getAbsolutePath()); // insert after driver.py path
@@ -347,25 +342,22 @@ public class PlotterPanel extends JPanel {
             cmd.add("--debug-position");
         }
 
-        // Skip alignment when user manually positioned content — coordinates are already absolute
-        if (!overlayApplied) {
-            boolean isPortrait = settingsPanel.isPortrait();
-            boolean needsAxisSwap = isPortrait && settingsPanel.getMachineWidth() > settingsPanel.getMachineHeight();
-            String alignment = settingsPanel.getCanvasAlignment();
-            if (alignment != null && !alignment.isEmpty()) {
-                if (needsAxisSwap) {
-                    alignment = translateAlignmentForPortrait(alignment,
-                            settingsPanel.isOriginRight(), settingsPanel.isOriginBottom());
-                }
-                cmd.add("--canvas-align");
-                cmd.add(alignment.toLowerCase().replace(" ", "-"));
+        boolean isPortrait = settingsPanel.isPortrait();
+        boolean needsAxisSwap = isPortrait && settingsPanel.getMachineWidth() > settingsPanel.getMachineHeight();
+        String alignment = settingsPanel.getCanvasAlignment();
+        if (alignment != null && !alignment.isEmpty()) {
+            if (needsAxisSwap) {
+                alignment = translateAlignmentForPortrait(alignment,
+                        settingsPanel.isOriginRight(), settingsPanel.isOriginBottom());
             }
-
-            cmd.add("--padding-x");
-            cmd.add(String.valueOf(settingsPanel.getPaddingX()));
-            cmd.add("--padding-y");
-            cmd.add(String.valueOf(settingsPanel.getPaddingY()));
+            cmd.add("--canvas-align");
+            cmd.add(alignment.toLowerCase().replace(" ", "-"));
         }
+
+        cmd.add("--padding-x");
+        cmd.add(String.valueOf(settingsPanel.getPaddingX()));
+        cmd.add("--padding-y");
+        cmd.add(String.valueOf(settingsPanel.getPaddingY()));
 
         int rotation = settingsPanel.getViewRotation();
         if (rotation != 0) {
