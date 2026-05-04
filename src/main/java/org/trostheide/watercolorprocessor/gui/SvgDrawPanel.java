@@ -26,6 +26,7 @@ public class SvgDrawPanel extends JPanel {
     private final SettingsPanel settingsPanel;
 
     private boolean updatingPreset = false;
+    private double aspectRatio = 1.0;
     private Consumer<File> onJsonReady;
 
     public SvgDrawPanel(SettingsPanel settingsPanel) {
@@ -91,7 +92,7 @@ public class SvgDrawPanel extends JPanel {
         sg.gridx = 1; sg.weightx = 0.3;
         targetWidthSpinner = new JSpinner(new SpinnerNumberModel(0.0, 0.0, 10000.0, 10.0));
         targetWidthSpinner.setToolTipText("Target width in mm (0 = original size)");
-        targetWidthSpinner.addChangeListener(e -> onSizeChanged());
+        targetWidthSpinner.addChangeListener(e -> onWidthChanged());
         sizePanel.add(targetWidthSpinner, sg);
 
         sg.gridx = 2; sg.weightx = 0;
@@ -100,7 +101,7 @@ public class SvgDrawPanel extends JPanel {
         sg.gridx = 3; sg.weightx = 0.3;
         targetHeightSpinner = new JSpinner(new SpinnerNumberModel(0.0, 0.0, 10000.0, 10.0));
         targetHeightSpinner.setToolTipText("Target height in mm (0 = original size)");
-        targetHeightSpinner.addChangeListener(e -> onSizeChanged());
+        targetHeightSpinner.addChangeListener(e -> onHeightChanged());
         sizePanel.add(targetHeightSpinner, sg);
 
         // Row 2: Position X + Y
@@ -188,17 +189,40 @@ public class SvgDrawPanel extends JPanel {
         if (w > 0 && h > 0) {
             targetWidthSpinner.setValue(w);
             targetHeightSpinner.setValue(h);
+            aspectRatio = w / h;
         }
 
         updatingPreset = false;
     }
 
-    private void onSizeChanged() {
-        if (!updatingPreset) {
-            updatingPreset = true;
-            presetCombo.setSelectedItem("Custom");
-            updatingPreset = false;
+    private void onWidthChanged() {
+        if (updatingPreset) return;
+        updatingPreset = true;
+        presetCombo.setSelectedItem("Custom");
+        if (keepAspectCheckBox.isSelected()) {
+            double w = (Double) targetWidthSpinner.getValue();
+            double h = (Double) targetHeightSpinner.getValue();
+            if (aspectRatio > 0 && w > 0) {
+                targetHeightSpinner.setValue(Math.round(w / aspectRatio * 10.0) / 10.0);
+            }
+            if (w > 0 && h > 0) aspectRatio = w / h;
         }
+        updatingPreset = false;
+    }
+
+    private void onHeightChanged() {
+        if (updatingPreset) return;
+        updatingPreset = true;
+        presetCombo.setSelectedItem("Custom");
+        if (keepAspectCheckBox.isSelected()) {
+            double w = (Double) targetWidthSpinner.getValue();
+            double h = (Double) targetHeightSpinner.getValue();
+            if (aspectRatio > 0 && h > 0) {
+                targetWidthSpinner.setValue(Math.round(h * aspectRatio * 10.0) / 10.0);
+            }
+            if (w > 0 && h > 0) aspectRatio = w / h;
+        }
+        updatingPreset = false;
     }
 
     private void selectSvgFile() {
