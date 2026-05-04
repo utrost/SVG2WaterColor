@@ -15,6 +15,7 @@ import java.util.Map;
 public class SettingsPanel extends JPanel {
 
     // General Settings
+    private final JTextField pythonPathField;
     private final JSpinner speedDownSpinner;
     private final JSpinner speedUpSpinner;
     private JSpinner zUpSpinner;
@@ -127,7 +128,21 @@ public class SettingsPanel extends JPanel {
         backendRow.add(portraitRadio);
         backendRow.add(landscapeRadio);
 
-        hardwarePanel.add(backendRow, BorderLayout.NORTH);
+        JPanel topHardware = new JPanel();
+        topHardware.setLayout(new BoxLayout(topHardware, BoxLayout.Y_AXIS));
+        topHardware.setOpaque(false);
+        topHardware.add(backendRow);
+
+        JPanel pythonRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        pythonRow.setOpaque(false);
+        pythonRow.add(label("Python Path"));
+        String defaultPython = System.getProperty("os.name").toLowerCase().contains("win") ? "python" : "python3";
+        pythonPathField = new JTextField(defaultPython, 20);
+        pythonPathField.setToolTipText("Path to the Python interpreter (python or python3)");
+        pythonRow.add(pythonPathField);
+        topHardware.add(pythonRow);
+
+        hardwarePanel.add(topHardware, BorderLayout.NORTH);
 
         // -- AxiDraw settings (shown when backend=AxiDraw) --
         axidrawSettingsPanel = new JPanel(new GridBagLayout());
@@ -509,6 +524,7 @@ public class SettingsPanel extends JPanel {
     }
 
     // --- Public Accessors for PlotterPanel ---
+    public String getPythonPath() { return pythonPathField.getText().trim(); }
     public String getBackend() { return backendCombo.getSelectedIndex() == 0 ? "axidraw" : "gcode"; }
     public String getSerialPort() { return serialPortField.getText().trim(); }
     public int getDrawSpeed() { return (Integer) speedDownSpinner.getValue(); }
@@ -560,6 +576,7 @@ public class SettingsPanel extends JPanel {
     }
 
     public void setSettingsEnabled(boolean enabled) {
+        pythonPathField.setEnabled(enabled);
         backendCombo.setEnabled(enabled);
         modelComboBox.setEnabled(enabled);
         speedDownSpinner.setEnabled(enabled);
@@ -697,6 +714,10 @@ public class SettingsPanel extends JPanel {
                     paddingXSpinner.setValue(gen.paddingX);
                     paddingYSpinner.setValue(gen.paddingY);
 
+                    if (gen.pythonPath != null && !gen.pythonPath.isEmpty()) {
+                        pythonPathField.setText(gen.pythonPath);
+                    }
+
                     if ("gcode".equals(gen.backend)) {
                         backendCombo.setSelectedIndex(1);
                     } else {
@@ -823,6 +844,7 @@ public class SettingsPanel extends JPanel {
             gen.paddingX = getPaddingX();
             gen.paddingY = getPaddingY();
             gen.backend = getBackend();
+            gen.pythonPath = getPythonPath();
 
             if ("gcode".equals(gen.backend)) {
                 GcodeSettings gc = new GcodeSettings();

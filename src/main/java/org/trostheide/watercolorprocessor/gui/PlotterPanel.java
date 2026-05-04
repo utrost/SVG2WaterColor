@@ -18,7 +18,6 @@ import java.util.Map;
 public class PlotterPanel extends JPanel {
 
     private final JTextField jsonField;
-    private final JTextField pythonPathField;
     private final JCheckBox verboseCheckBox;
     private final JCheckBox debugPositionCheckBox;
     private final SettingsPanel settingsPanel;
@@ -63,18 +62,8 @@ public class PlotterPanel extends JPanel {
         selectJsonBtn.addActionListener(e -> selectFile());
         configPanel.add(selectJsonBtn, gbc);
 
-        // Python Path
-        gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0;
-        configPanel.add(label("Python Path"), gbc);
-
-        gbc.gridx = 1; gbc.weightx = 1.0;
-        String defaultPython = System.getProperty("os.name").toLowerCase().contains("win") ? "python" : "python3";
-        pythonPathField = new JTextField(defaultPython);
-        pythonPathField.setToolTipText("Path to the Python interpreter (python or python3)");
-        configPanel.add(pythonPathField, gbc);
-
         // Options row
-        gbc.gridx = 0; gbc.gridy = 2; gbc.weightx = 0;
+        gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0;
         configPanel.add(label("Options"), gbc);
 
         gbc.gridx = 1; gbc.weightx = 1.0; gbc.gridwidth = 2;
@@ -402,7 +391,6 @@ public class PlotterPanel extends JPanel {
             inputButton.setEnabled(true);
 
             settingsPanel.setSettingsEnabled(false);
-            pythonPathField.setEnabled(false);
 
             new Thread(() -> {
                 try (BufferedReader reader = new BufferedReader(
@@ -475,7 +463,6 @@ public class PlotterPanel extends JPanel {
         inputButton.setEnabled(false);
 
         settingsPanel.setSettingsEnabled(true);
-        pythonPathField.setEnabled(true);
 
         currentProcess = null;
         processInputWriter = null;
@@ -486,7 +473,7 @@ public class PlotterPanel extends JPanel {
 
     private List<String> buildDriverCommand() {
         List<String> cmd = new ArrayList<>();
-        cmd.add(pythonPathField.getText().trim());
+        cmd.add(settingsPanel.getPythonPath());
         cmd.add("driver/driver.py");
 
         boolean isGcode = "gcode".equals(settingsPanel.getBackend());

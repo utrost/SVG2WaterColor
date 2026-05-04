@@ -232,6 +232,7 @@ public class VisualizationPanel extends JPanel {
                 } else {
                     handleResize(dragHandle, dx, dy);
                 }
+                clampOverlayToBed();
                 repaint();
             }
 
@@ -428,6 +429,11 @@ public class VisualizationPanel extends JPanel {
      * Overlay transform (scale + offset) is applied in raw content space before the driver pipeline.
      */
     private double[] transformPoint(Point2D rawPoint) {
+        double[] motor = transformPointToMotor(rawPoint);
+        return physicalToScreen(motor[0], motor[1]);
+    }
+
+    private double[] transformPointToMotor(Point2D rawPoint) {
         double cx = (rawMinX + rawMaxX) / 2.0;
         double cy = (rawMinY + rawMaxY) / 2.0;
         double x = (rawPoint.x() - cx) * overlayScale + cx + overlayOffsetX;
@@ -440,7 +446,53 @@ public class VisualizationPanel extends JPanel {
                 dataRotation, contentBoundsArray());
         motor[0] += alignOffsetX;
         motor[1] += alignOffsetY;
-        return physicalToScreen(motor[0], motor[1]);
+        return motor;
+    }
+
+    private void clampOverlayToBed() {
+        if (allPaths.isEmpty()) return;
+        Point2D[] corners = {
+            new Point2D(rawMinX, rawMinY), new Point2D(rawMaxX, rawMinY),
+            new Point2D(rawMinX, rawMaxY), new Point2D(rawMaxX, rawMaxY)
+        };
+        double mMinX = Double.MAX_VALUE, mMinY = Double.MAX_VALUE;
+        double mMaxX = -Double.MAX_VALUE, mMaxY = -Double.MAX_VALUE;
+        for (Point2D c : corners) {
+            double[] m = transformPointToMotor(c);
+            mMinX = Math.min(mMinX, m[0]); mMaxX = Math.max(mMaxX, m[0]);
+            mMinY = Math.min(mMinY, m[1]); mMaxY = Math.max(mMaxY, m[1]);
+        }
+        double bedW = needsAxisSwap() ? Math.max(machineWidth, machineHeight) : machineWidth;
+        double bedH = needsAxisSwap() ? Math.min(machineWidth, machineHeight) : machineHeight;
+        double shiftMmX = 0, shiftMmY = 0;
+        if (mMinX < 0) shiftMmX = -mMinX;
+        else if (mMaxX > bedW) shiftMmX = bedW - mMaxX;
+        if (mMinY < 0) shiftMmY = -mMinY;
+        else if (mMaxY > bedH) shiftMmY = bedH - mMaxY;
+        if (shiftMmX != 0 || shiftMmY != 0) {
+            // Convert motor-space correction back to raw content space
+            // Use the same finite-difference approach but in reverse (motor->raw)
+            double cx = (rawMinX + rawMaxX) / 2.0;
+            double cy = (rawMinY + rawMaxY) / 2.0;
+            double[] baseMotor = transformPointToMotor(new Point2D(cx, cy));
+            // Temporarily adjust offset by +1 in each axis to measure the mapping
+            double savedOX = overlayOffsetX, savedOY = overlayOffsetY;
+            overlayOffsetX += 1;
+            double[] dxMotor = transformPointToMotor(new Point2D(cx, cy));
+            overlayOffsetX = savedOX;
+            overlayOffsetY += 1;
+            double[] dyMotor = transformPointToMotor(new Point2D(cx, cy));
+            overlayOffsetY = savedOY;
+            double a = dxMotor[0] - baseMotor[0], b = dyMotor[0] - baseMotor[0];
+            double c2 = dxMotor[1] - baseMotor[1], d = dyMotor[1] - baseMotor[1];
+            double det = a * d - b * c2;
+            if (Math.abs(det) > 1e-10) {
+                double rawDX = (shiftMmX * d - shiftMmY * b) / det;
+                double rawDY = (a * shiftMmY - c2 * shiftMmX) / det;
+                overlayOffsetX += rawDX;
+                overlayOffsetY += rawDY;
+            }
+        }
     }
 
     // ----- Painting -----
