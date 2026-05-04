@@ -23,5 +23,6 @@ public class GeneralSettings {
     public double paddingY;
     public boolean invertJogY;
     public String backend = "axidraw";
+    public String pythonPath;
     public GcodeSettings gcode;
 }
