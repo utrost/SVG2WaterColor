@@ -10,7 +10,7 @@ Supports both AxiDraw (via pyaxidraw) and G-code/GRBL plotters out of the box.
 SVG (Inkscape layers) --> Java Processor --> commands.json --> Python Driver --> Physical Plot
 ```
 
-**Stage 1 -- Java Preprocessor:** Parses the SVG, identifies color layers (Inkscape layer names = paint station IDs), converts all primitives to paths, linearizes curves, segments strokes by paint capacity (`maxDrawDistance`), and inserts automatic refill commands.
+**Stage 1 -- Java Preprocessor:** Parses the SVG, identifies color layers (Inkscape layer names = paint station IDs), converts all primitives to paths, linearizes curves, segments strokes by paint capacity (`maxDrawDistance`), and inserts automatic refill commands. Supports explicit target size and position for precise placement on the machine bed.
 
 **Stage 2 -- Python Driver:** Reads the command JSON and drives the physical plotter via pyaxidraw or G-code over USB. Handles pen up/down, refill dip sequences at configured station coordinates, inter-layer brush changes (with user prompts), and real-time position reporting.
 
@@ -22,10 +22,14 @@ SVG (Inkscape layers) --> Java Processor --> commands.json --> Python Driver -->
 - **Configurable Machine Origin** -- Supports plotters with home position at any corner (Top-Left, Top-Right, Bottom-Left, Bottom-Right); automatically derives axis inversion from origin selection
 - **Canvas Alignment** -- Snap drawings to any corner or center of the machine bed, with padding offsets
 - **Live Visualization** -- Digital twin that accurately previews the physical plot for any origin/alignment/rotation configuration
+- **Interactive Positioning** -- Drag-to-move and handle-based resize of drawing content directly on the visualization panel
+- **Draw SVG Mode** -- Plain pen plotting without watercolor refills; converts SVG to plotter commands on the fly
+- **Explicit Size & Position** -- Target width/height with aspect ratio lock and X/Y position for precise placement on the machine bed
 - **Primitive Normalization** -- Converts `<rect>`, `<circle>`, `<ellipse>`, `<line>`, `<polyline>`, `<polygon>` to paths
 - **Curve Linearization** -- PathIterator-based, configurable step size (default 0.5mm)
-- **Auto-Scaling** -- Fit-to-page for A5/A4/A3/XL with padding
-- **Swing GUI** -- Dark-themed (FlatDarkLaf) interface with SVG processing, live visualization, station management, plotter settings, and manual jog controls
+- **Auto-Scaling** -- Fit-to-page for A5/A4/A3/XL/Machine with padding, plus custom target dimensions
+- **Robust SVG Parsing** -- Falls back to generic XML parser for SVGs with non-standard elements
+- **Swing GUI** -- Dark-themed (FlatDarkLaf) interface with SVG processing, Draw SVG, live visualization, station management, plotter settings, and manual jog controls
 - **Mock Mode** -- Full simulation without hardware for testing and preview
 
 ## Prerequisites
@@ -96,20 +100,24 @@ See the [Driver CLI Reference](#driver-cli-reference) below for all options.
 
 ## GUI Overview
 
-The application has three tabs:
+The application has three tabs plus a settings dialog:
 
-### Process SVG
-Configure and run the SVG-to-JSON conversion. Select input/output files, set draw distance, curve step, paper format, and padding. Progress bar shows conversion status.
+### Process SVG (Tab)
+Configure and run the SVG-to-JSON conversion for watercolor plotting. Select input/output files, set draw distance, curve step, and size/position parameters. The **Size & Position** section provides explicit Width/Height spinners with aspect ratio lock, X/Y position, and presets (A5/A4/A3/Custom).
 
-### Plot
-Control the physical plotting process. Select the commands.json file, start/stop the driver, and view real-time output in the dark-themed console. The right-hand **Live View** panel shows a digital twin of the machine bed with:
-- Machine bed outline with origin marker and axis indicators
-- Drawing paths in their actual aligned position
-- Paint station markers
-- Real-time cursor tracking during plotting
+### Draw SVG (Tab)
+Quick pen-plotting mode for plain drawing without watercolor refills. Select an SVG, configure size (with "Machine" preset that auto-fills machine bed dimensions), and click "Convert & Plot" to generate commands and auto-switch to the Plot tab.
 
-### Settings
-Configure hardware and calibration. Four sections:
+### Plot (Tab)
+Control the physical plotting process. Features:
+- **Commands File** field (auto-filled from Process SVG or Draw SVG)
+- **Live View** digital twin showing machine bed, drawing paths, stations, and real-time cursor
+- **Interactive Positioning** -- drag the drawing to reposition, drag corner/edge handles to resize. A dashed bounding box with 8 handles appears around loaded content. The transform is baked into the JSON on plot start.
+- **Manual Controls** (left panel) -- jog buttons, pen up/down, raw G-code input
+- **Reset Position** button to clear drag/resize adjustments
+
+### Settings (File > Settings or Ctrl+,)
+Hardware and calibration settings in a separate dialog. Four sections:
 
 **Hardware** -- Select backend (AxiDraw or G-code), plotter model/size, orientation, and backend-specific settings. AxiDraw settings include model, speeds, and pen heights. G-code settings include serial port, baud rate, pen control mode (servo/Z-axis/M3-M5), feed rates, and machine dimensions.
 
@@ -117,7 +125,7 @@ Configure hardware and calibration. Four sections:
 
 **Paint Stations** -- Add, edit, and remove paint refill stations with X/Y positions, pen-down depth, and dip behavior (simple dip or dip+swirl).
 
-**Manual Control** -- Jog the plotter head with directional buttons or arrow keys, test pen up/down. Step size is configurable. Jog directions automatically adapt to the selected machine origin.
+A **settings summary strip** on the Plot tab shows the active configuration at a glance (backend, origin, dimensions, alignment, orientation).
 
 ## Plotter Backend Support
 
@@ -294,15 +302,17 @@ SVG2WaterColor/
 |   +-- gui/                            # Swing GUI
 |       +-- WatercolorGUI.java          # App launcher (FlatDarkLaf theme)
 |       +-- MainFrame.java             # Top-level frame with tabs + status bar
-|       +-- ProcessorPanel.java         # SVG processing controls
+|       +-- ProcessorPanel.java         # Watercolor SVG processing controls
+|       +-- SvgDrawPanel.java           # Plain pen plotting (no refills)
 |       +-- PlotterPanel.java           # Driver control & live visualization
-|       +-- SettingsPanel.java          # Hardware, stations, manual control
-|       +-- VisualizationPanel.java     # Digital twin / live view
+|       +-- SettingsPanel.java          # Hardware, coordinate mapping, stations
+|       +-- SettingsDialog.java         # Modal settings dialog wrapper
+|       +-- VisualizationPanel.java     # Digital twin / live view + interactive positioning
+|       +-- CoordinateTransform.java    # Java-side coordinate transform utilities
 |       +-- GeneralSettings.java        # Settings POJO (config.json serialization)
 |       +-- GcodeSettings.java          # G-code backend settings POJO
 |       +-- StationConfig.java          # Station definition record
 |       +-- AppConfig.java              # Root config wrapper
-|       +-- ProcessingWorker.java       # Async SVG processing worker
 +-- driver/                             # Python hardware driver
 |   +-- driver.py                       # Main entry point + CLI
 |   +-- transforms.py                   # Coordinate transformation library

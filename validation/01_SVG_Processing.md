@@ -63,3 +63,39 @@
 | **Result** | - [ ] PASSED  /  - [ ] FAILED |
 | **Deviation** | |
 | **Comment** | |
+
+### 1.7 No-Refill Mode (Draw SVG)
+| Field | Value |
+|---|---|
+| **Steps** | Use "Draw SVG" tab. Select an SVG, click "Convert & Plot". Inspect generated JSON. |
+| **Expected** | No `REFILL` commands in the output JSON. All paths converted to MOVE/DRAW commands. Commands file auto-loaded in Plot tab. |
+| **Result** | - [ ] PASSED  /  - [ ] FAILED |
+| **Deviation** | |
+| **Comment** | |
+
+### 1.8 Explicit Size & Position
+| Field | Value |
+|---|---|
+| **Steps** | In Process SVG tab, set Width=100, Height=100, Pos X=50, Pos Y=50. Process an SVG. Check output bounds. |
+| **Expected** | Output `metadata.bounds` shows content scaled to ~100x100mm and offset to start at approximately (50, 50). |
+| **Result** | - [ ] PASSED  /  - [ ] FAILED |
+| **Deviation** | |
+| **Comment** | |
+
+### 1.9 Aspect Ratio Lock
+| Field | Value |
+|---|---|
+| **Steps** | Check "Keep Aspect Ratio". Set Width=200. Observe Height field. |
+| **Expected** | Height auto-updates to maintain the original aspect ratio of the loaded SVG. |
+| **Result** | - [ ] PASSED  /  - [ ] FAILED |
+| **Deviation** | |
+| **Comment** | |
+
+### 1.10 Robust SVG Parsing (Non-Standard Elements)
+| Field | Value |
+|---|---|
+| **Steps** | Process an SVG containing non-standard elements (e.g., `<plotdata>`, `<custom:metadata>`). |
+| **Expected** | Processing succeeds with fallback parser. Standard drawing elements are correctly extracted and converted. |
+| **Result** | - [ ] PASSED  /  - [ ] FAILED |
+| **Deviation** | |
+| **Comment** | |

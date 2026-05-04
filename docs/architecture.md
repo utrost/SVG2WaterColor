@@ -54,25 +54,33 @@ Start the Swing GUI (FlatDarkLaf dark theme):
 java -jar target/watercolor-processor-1.0-SNAPSHOT.jar --gui
 ```
 
-The GUI has three tabs:
+The GUI has three tabs plus a settings dialog:
 
-**Process SVG:** Configure and run the SVG-to-JSON conversion with fit-to-page auto-scaling.
+**Process SVG (Tab):** Configure and run the SVG-to-JSON conversion for watercolor plotting. Includes size/position controls (Width/Height with aspect ratio lock, Pos X/Y) and presets (A5/A4/A3/Custom).
 
-**Plot:** Start/stop the Python driver, view real-time console output, and monitor the Live View digital twin showing machine bed, drawing paths, stations, and cursor position.
+**Draw SVG (Tab):** Quick pen-plotting mode for plain drawing without watercolor refills. Select an SVG, configure size (with "Machine" preset that auto-fills machine bed dimensions), and click "Convert & Plot" to generate commands and auto-switch to the Plot tab.
 
-**Settings:** Four sections:
+**Plot (Tab):** Control the physical plotting process. Features:
+- Commands File field (auto-filled from Process SVG or Draw SVG)
+- Live View digital twin showing machine bed, drawing paths, stations, and real-time cursor
+- Interactive Positioning -- drag the drawing to reposition, drag corner/edge handles to resize. A dashed bounding box with 8 handles appears around loaded content. The transform is baked into the JSON on plot start.
+- Manual Controls (left panel) -- jog buttons, pen up/down, raw G-code input
+- Reset Position button to clear drag/resize adjustments
+
+**Settings (File > Settings or Ctrl+,):** Hardware and calibration in a separate dialog. Three sections:
 - **Hardware** -- Select backend (AxiDraw or G-code), plotter model/size, orientation. Backend-specific settings swap in via CardLayout (AxiDraw: model, speeds, pen heights; G-code: serial port, baud rate, pen mode, feed rates, servo/Z positions, machine dimensions).
 - **Coordinate Mapping** -- Machine Origin dropdown (replaces old invertX/invertY checkboxes), Swap XY toggle, canvas alignment, data rotation, padding.
 - **Paint Stations** -- Add/edit/remove refill stations with X/Y positions, pen-down depth, and dip behavior.
-- **Manual Control** -- Jog buttons and arrow keys (origin-aware), pen up/down testing, configurable step size.
 
 ### 2.3 Processing Pipeline
 
-1. **Layer Identification:** Scans the SVG DOM for `<g>` elements with `inkscape:groupmode="layer"`. Extracts `inkscape:label` as the Station ID. Falls back to `defaultStationId` if no layers exist.
-2. **Primitive Normalization:** Converts `<rect>`, `<circle>`, `<ellipse>`, `<line>`, `<polyline>`, `<polygon>` into standard SVG path definitions.
-3. **Linearization & Scaling:** Applies global transforms for fit-to-page. Converts all paths into polylines using `PathIterator` with configurable step size.
-4. **Segmentation & Refill Insertion:** Tracks cumulative distance per layer. Inserts REFILL at layer start and whenever a segment exceeds remaining paint capacity, calculating precise split points.
-5. **Serialization:** Writes `ProcessorOutput` (metadata + layers) to JSON.
+1. **SVG Loading:** Tries Batik's `SAXSVGDocumentFactory` first. Falls back to generic `DocumentBuilderFactory` XML parser if the SVG contains non-standard elements (e.g., `<plotdata>`).
+2. **Layer Identification:** Scans the SVG DOM for `<g>` elements with `inkscape:groupmode="layer"`. Extracts `inkscape:label` as the Station ID. Falls back to `defaultStationId` if no layers exist.
+3. **Primitive Normalization:** Converts `<rect>`, `<circle>`, `<ellipse>`, `<line>`, `<polyline>`, `<polygon>` into standard SVG path definitions.
+4. **Size & Position Transform:** If explicit target width/height are specified, calculates a scale+translate transform to place content at the target size and position on the machine bed. Supports aspect ratio locking.
+5. **Linearization & Scaling:** Applies global transforms (fit-to-page or explicit target size). Converts all paths into polylines using `PathIterator` with configurable step size.
+6. **Segmentation & Refill Insertion:** Tracks cumulative distance per layer. Inserts REFILL at layer start and whenever a segment exceeds remaining paint capacity, calculating precise split points. Skipped entirely when `maxDrawDistance <= 0` (Draw SVG / no-refill mode).
+7. **Serialization:** Writes `ProcessorOutput` (metadata + layers) to JSON.
 
 ## 3. JSON Command Contract
 
@@ -225,15 +233,16 @@ Key arguments:
 
 ## 5. Visualization (Digital Twin)
 
-The `VisualizationPanel` provides a real-time preview of the physical plot.
+The `VisualizationPanel` provides a real-time preview of the physical plot with interactive positioning.
 
 ### 5.1 Rendering Pipeline
 
 1. **Load paths** from `commands.json` (MOVE/DRAW sequences per layer)
-2. **Simulate driver transforms**: rotate → swap → invert, matching `transforms.py` exactly
-3. **Calculate alignment offset**: origin-aware, mirrors `calculate_alignment_offset()`
-4. **Map physical to screen**: `physicalToScreen()` converts motor coordinates to screen pixels based on the machine origin corner
-5. **Render**: machine bed outline, origin marker, axis indicators, drawing paths, station markers, real-time cursor
+2. **Apply overlay transform**: scale and offset from interactive drag/resize (applied in raw content space before driver transforms)
+3. **Simulate driver transforms**: rotate → swap → invert, matching `transforms.py` exactly
+4. **Calculate alignment offset**: origin-aware, mirrors `calculate_alignment_offset()`
+5. **Map physical to screen**: `physicalToScreen()` converts motor coordinates to screen pixels based on the machine origin corner
+6. **Render**: machine bed outline, origin marker, axis indicators, drawing paths, bounding box with handles, station markers, real-time cursor
 
 ### 5.2 Origin-Aware Screen Mapping
 
@@ -244,7 +253,17 @@ double screenY = isOriginBottom() ? (machineHeight - motorY) : motorY;
 
 The origin marker and axis arrows render in the correct corner. Stations pass through the same mapping.
 
-### 5.3 HUD Overlay
+### 5.3 Interactive Positioning
+
+Users can visually adjust drawing placement on the machine bed:
+
+- **Drag-to-move**: Click and drag anywhere on the drawing content to reposition it
+- **Handle-based resize**: 8 handles (4 corners + 4 edge midpoints) on a dashed bounding box allow uniform scaling
+- **Screen-to-mm inversion**: Uses a finite-difference Jacobian approach to convert screen pixel deltas to mm deltas, correctly handling any combination of origin/swap/rotation settings
+- **Transform baking**: On plot start, the overlay transform (scale around content center + offset) is baked into a temporary copy of the JSON file, rewriting all MOVE/DRAW coordinates
+- **Reset**: "Reset Position" button clears all drag/resize adjustments
+
+### 5.4 HUD Overlay
 
 Displays current settings: origin corner, alignment, rotation, swap state, padding, machine dimensions, drawing bounds.
 
@@ -260,15 +279,17 @@ SVG2WaterColor/
 │   └── gui/                            # Swing GUI
 │       ├── WatercolorGUI.java          # App launcher (FlatDarkLaf theme)
 │       ├── MainFrame.java              # Top-level frame with tabs + status bar
-│       ├── ProcessorPanel.java         # SVG processing controls
+│       ├── ProcessorPanel.java         # Watercolor SVG processing controls
+│       ├── SvgDrawPanel.java           # Plain pen plotting (no refills)
 │       ├── PlotterPanel.java           # Driver control & live visualization
-│       ├── SettingsPanel.java          # Hardware, stations, manual control
-│       ├── VisualizationPanel.java     # Digital twin / live view
+│       ├── SettingsPanel.java          # Hardware, coordinate mapping, stations
+│       ├── SettingsDialog.java         # Modal settings dialog wrapper
+│       ├── VisualizationPanel.java     # Digital twin / live view + interactive positioning
+│       ├── CoordinateTransform.java    # Java-side coordinate transform utilities
 │       ├── GeneralSettings.java        # Settings POJO (config.json serialization)
 │       ├── GcodeSettings.java          # G-code backend settings POJO
 │       ├── StationConfig.java          # Station definition record
-│       ├── AppConfig.java              # Root config wrapper
-│       └── ProcessingWorker.java       # Async SVG processing worker
+│       └── AppConfig.java              # Root config wrapper
 ├── driver/                             # Python hardware driver
 │   ├── driver.py                       # Main entry point + CLI + backend factory
 │   ├── transforms.py                   # Coordinate transformation library

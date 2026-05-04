@@ -1,6 +1,6 @@
 # Validation Script 03: GUI Settings & Configuration
 
-**Objective:** Verify the Settings tab correctly manages plotter configuration, station definitions, and persists/loads state.
+**Objective:** Verify the Settings dialog correctly manages plotter configuration, station definitions, and persists/loads state.
 
 **Prerequisites:**
 - GUI built and launchable (`./run_gui.sh`)
@@ -9,11 +9,11 @@
 
 ## Test Cases
 
-### 3.1 Settings Tab Layout
+### 3.1 Settings Dialog Layout
 | Field | Value |
 |---|---|
-| **Steps** | Launch GUI. Navigate to the Settings tab. |
-| **Expected** | Tab displays: Plotter Model selector, Orientation controls (Invert X/Y, Swap XY, Visual Mirror), Pen Up/Down spinners, Speed spinners, Jog controls, Station table. |
+| **Steps** | Launch GUI. Open Settings (File > Settings or Ctrl+,). |
+| **Expected** | Dialog displays three sections: Hardware (backend, model, orientation, backend-specific settings), Coordinate Mapping (Machine Origin dropdown, Swap XY, canvas alignment, rotation, padding), Paint Stations (table with add/edit/remove). |
 | **Result** | - [ ] PASSED  /  - [ ] FAILED |
 | **Deviation** | |
 | **Comment** | |
@@ -30,8 +30,8 @@
 ### 3.3 Save Configuration
 | Field | Value |
 |---|---|
-| **Steps** | Modify settings (change speed, add a station). Click "Save Config". |
-| **Expected** | Config file saved. Active config path displayed in UI. |
+| **Steps** | Modify settings (change speed, add a station). Close Settings dialog. |
+| **Expected** | Config file saved automatically. Settings summary strip on Plot tab updates. |
 | **Result** | - [ ] PASSED  /  - [ ] FAILED |
 | **Deviation** | |
 | **Comment** | |
@@ -40,16 +40,16 @@
 | Field | Value |
 |---|---|
 | **Steps** | Save a config with distinct values. Close and relaunch the GUI. |
-| **Expected** | All saved values (speeds, pen heights, flags, stations) are restored on startup. No manual refresh needed. |
+| **Expected** | All saved values (speeds, pen heights, origin, stations) are restored on startup. No manual refresh needed. |
 | **Result** | - [ ] PASSED  /  - [ ] FAILED |
 | **Deviation** | |
 | **Comment** | |
 
-### 3.5 Manual Jog Controls
+### 3.5 Manual Jog Controls (Plot Tab)
 | Field | Value |
 |---|---|
-| **Steps** | In Settings tab, connect to plotter (or mock). Use directional jog buttons. |
-| **Expected** | Each button sends a movement command. Console/log confirms direction and distance. |
+| **Steps** | On the Plot tab, connect to plotter (or mock). Use directional jog buttons in the left panel. |
+| **Expected** | Each button sends a movement command in the direction matching the screen label (origin-aware). Console/log confirms direction and distance. |
 | **Result** | - [ ] PASSED  /  - [ ] FAILED |
 | **Deviation** | |
 | **Comment** | |
@@ -57,8 +57,26 @@
 ### 3.6 Pen Test Buttons
 | Field | Value |
 |---|---|
-| **Steps** | Click "Test UP" and "Test DOWN" buttons. |
+| **Steps** | On the Plot tab, click "Pen UP" and "Pen DOWN" buttons. |
 | **Expected** | Pen physically raises / lowers (or mock logs it). Button feedback is immediate. |
+| **Result** | - [ ] PASSED  /  - [ ] FAILED |
+| **Deviation** | |
+| **Comment** | |
+
+### 3.7 Machine Origin Selection
+| Field | Value |
+|---|---|
+| **Steps** | In Settings > Coordinate Mapping, change Machine Origin dropdown between all four options (Top-Left, Top-Right, Bottom-Left, Bottom-Right). |
+| **Expected** | Visualization updates origin marker position. Jog buttons adapt directions. Settings summary strip reflects change. |
+| **Result** | - [ ] PASSED  /  - [ ] FAILED |
+| **Deviation** | |
+| **Comment** | |
+
+### 3.8 Old Config Migration
+| Field | Value |
+|---|---|
+| **Steps** | Place a config.json with `invertX: true, invertY: false` but no `machineOrigin` field. Launch the GUI. |
+| **Expected** | Machine Origin dropdown shows "Top-Right" (inferred from invertX=true). Settings function correctly. |
 | **Result** | - [ ] PASSED  /  - [ ] FAILED |
 | **Deviation** | |
 | **Comment** | |
