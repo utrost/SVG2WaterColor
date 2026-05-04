@@ -317,14 +317,17 @@ public class PlotterPanel extends JPanel {
         settingsPanel.saveConfigSilent();
 
         // Apply visual overlay transform to JSON if user has dragged/resized
+        boolean overlayApplied = false;
         if (visPanel.hasOverlayTransform()) {
             try {
                 jsonFile = applyOverlayToJson(jsonFile,
-                        visPanel.getOverlayScale(), visPanel.getOverlayOffsetX(), visPanel.getOverlayOffsetY());
+                        visPanel.getOverlayScale(), visPanel.getOverlayOffsetX(), visPanel.getOverlayOffsetY(),
+                        visPanel);
                 jsonField.setText(jsonFile.getAbsolutePath());
                 appendToConsole("Applied visual transform: scale=" +
                         String.format("%.2f", visPanel.getOverlayScale()) +
                         " offset=(" + String.format("%.1f, %.1f", visPanel.getOverlayOffsetX(), visPanel.getOverlayOffsetY()) + ")");
+                overlayApplied = true;
                 visPanel.resetOverlay();
             } catch (Exception ex) {
                 appendToConsole("Warning: could not apply visual transform: " + ex.getMessage());
@@ -334,6 +337,9 @@ public class PlotterPanel extends JPanel {
         // Reload vis with the (possibly baked) JSON
         visPanel.loadFromJson(jsonFile);
         updateVisualSettings();
+        if (overlayApplied) {
+            visPanel.setSuppressAlignment(true);
+        }
 
         List<String> cmd = buildDriverCommand();
         cmd.add(2, jsonFile.getAbsolutePath()); // insert after driver.py path
@@ -342,22 +348,26 @@ public class PlotterPanel extends JPanel {
             cmd.add("--debug-position");
         }
 
-        boolean isPortrait = settingsPanel.isPortrait();
-        boolean needsAxisSwap = isPortrait && settingsPanel.getMachineWidth() > settingsPanel.getMachineHeight();
-        String alignment = settingsPanel.getCanvasAlignment();
-        if (alignment != null && !alignment.isEmpty()) {
-            if (needsAxisSwap) {
-                alignment = translateAlignmentForPortrait(alignment,
-                        settingsPanel.isOriginRight(), settingsPanel.isOriginBottom());
+        // Skip alignment when user manually positioned content — the baked coords
+        // already encode the final motor-space position
+        if (!overlayApplied) {
+            boolean isPortrait = settingsPanel.isPortrait();
+            boolean needsAxisSwap = isPortrait && settingsPanel.getMachineWidth() > settingsPanel.getMachineHeight();
+            String alignment = settingsPanel.getCanvasAlignment();
+            if (alignment != null && !alignment.isEmpty()) {
+                if (needsAxisSwap) {
+                    alignment = translateAlignmentForPortrait(alignment,
+                            settingsPanel.isOriginRight(), settingsPanel.isOriginBottom());
+                }
+                cmd.add("--canvas-align");
+                cmd.add(alignment.toLowerCase().replace(" ", "-"));
             }
-            cmd.add("--canvas-align");
-            cmd.add(alignment.toLowerCase().replace(" ", "-"));
-        }
 
-        cmd.add("--padding-x");
-        cmd.add(String.valueOf(settingsPanel.getPaddingX()));
-        cmd.add("--padding-y");
-        cmd.add(String.valueOf(settingsPanel.getPaddingY()));
+            cmd.add("--padding-x");
+            cmd.add(String.valueOf(settingsPanel.getPaddingX()));
+            cmd.add("--padding-y");
+            cmd.add(String.valueOf(settingsPanel.getPaddingY()));
+        }
 
         int rotation = settingsPanel.getViewRotation();
         if (rotation != 0) {
@@ -656,50 +666,44 @@ public class PlotterPanel extends JPanel {
         }
     }
 
-    private File applyOverlayToJson(File original, double scale, double offsetX, double offsetY) throws Exception {
+    private File applyOverlayToJson(File original, double scale, double offsetX, double offsetY,
+                                    VisualizationPanel vis) throws Exception {
         ObjectMapper mapper = new ObjectMapper();
         JsonNode root = mapper.readTree(original);
 
-        // Find content bounds for scale-around-center
-        double minX = Double.MAX_VALUE, maxX = -Double.MAX_VALUE;
-        double minY = Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
+        double[] rawBounds = vis.getRawBounds();
+        double cx = (rawBounds[0] + rawBounds[1]) / 2.0;
+        double cy = (rawBounds[2] + rawBounds[3]) / 2.0;
 
+        boolean swap = vis.getEffectiveSwap();
+        boolean invX = vis.getEffectiveInvertX();
+        boolean invY = vis.getEffectiveInvertY();
+        int rotation = vis.getDataRotation();
+        double mW = vis.getMachineWidth();
+        double mH = vis.getMachineHeight();
+        double alignOX = vis.getAlignOffsetX();
+        double alignOY = vis.getAlignOffsetY();
+
+        // For each point: apply overlay in raw space, forward-transform to motor space
+        // (including current alignment), then inverse-transform back to raw space.
+        // The driver will re-apply its own transform pipeline (without alignment),
+        // landing the point at the correct motor position.
         for (JsonNode layer : root.get("layers")) {
             for (JsonNode cmd : layer.get("commands")) {
                 if ("DRAW".equals(cmd.get("op").asText())) {
                     for (JsonNode p : cmd.get("points")) {
-                        double x = p.get("x").asDouble();
-                        double y = p.get("y").asDouble();
-                        minX = Math.min(minX, x); maxX = Math.max(maxX, x);
-                        minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+                        double[] baked = bakePoint(p.get("x").asDouble(), p.get("y").asDouble(),
+                                cx, cy, scale, offsetX, offsetY,
+                                swap, invX, invY, mW, mH, rotation, rawBounds, alignOX, alignOY);
+                        ((ObjectNode) p).put("x", baked[0]);
+                        ((ObjectNode) p).put("y", baked[1]);
                     }
                 } else if ("MOVE".equals(cmd.get("op").asText())) {
-                    double x = cmd.get("x").asDouble();
-                    double y = cmd.get("y").asDouble();
-                    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
-                    minY = Math.min(minY, y); maxY = Math.max(maxY, y);
-                }
-            }
-        }
-
-        double cx = (minX + maxX) / 2.0;
-        double cy = (minY + maxY) / 2.0;
-
-        // Transform all coordinates
-        for (JsonNode layer : root.get("layers")) {
-            for (JsonNode cmd : layer.get("commands")) {
-                if ("DRAW".equals(cmd.get("op").asText())) {
-                    for (JsonNode p : cmd.get("points")) {
-                        double x = (p.get("x").asDouble() - cx) * scale + cx + offsetX;
-                        double y = (p.get("y").asDouble() - cy) * scale + cy + offsetY;
-                        ((ObjectNode) p).put("x", x);
-                        ((ObjectNode) p).put("y", y);
-                    }
-                } else if ("MOVE".equals(cmd.get("op").asText())) {
-                    double x = (cmd.get("x").asDouble() - cx) * scale + cx + offsetX;
-                    double y = (cmd.get("y").asDouble() - cy) * scale + cy + offsetY;
-                    ((ObjectNode) cmd).put("x", x);
-                    ((ObjectNode) cmd).put("y", y);
+                    double[] baked = bakePoint(cmd.get("x").asDouble(), cmd.get("y").asDouble(),
+                            cx, cy, scale, offsetX, offsetY,
+                            swap, invX, invY, mW, mH, rotation, rawBounds, alignOX, alignOY);
+                    ((ObjectNode) cmd).put("x", baked[0]);
+                    ((ObjectNode) cmd).put("y", baked[1]);
                 }
             }
         }
@@ -707,15 +711,39 @@ public class PlotterPanel extends JPanel {
         // Update bounds in metadata
         if (root.has("metadata") && ((ObjectNode) root.get("metadata")).has("bounds")) {
             ObjectNode bounds = (ObjectNode) root.get("metadata").get("bounds");
-            bounds.put("minX", (bounds.get("minX").asDouble() - cx) * scale + cx + offsetX);
-            bounds.put("maxX", (bounds.get("maxX").asDouble() - cx) * scale + cx + offsetX);
-            bounds.put("minY", (bounds.get("minY").asDouble() - cy) * scale + cy + offsetY);
-            bounds.put("maxY", (bounds.get("maxY").asDouble() - cy) * scale + cy + offsetY);
+            double[] bMin = bakePoint(bounds.get("minX").asDouble(), bounds.get("minY").asDouble(),
+                    cx, cy, scale, offsetX, offsetY, swap, invX, invY, mW, mH, rotation, rawBounds, alignOX, alignOY);
+            double[] bMax = bakePoint(bounds.get("maxX").asDouble(), bounds.get("maxY").asDouble(),
+                    cx, cy, scale, offsetX, offsetY, swap, invX, invY, mW, mH, rotation, rawBounds, alignOX, alignOY);
+            bounds.put("minX", Math.min(bMin[0], bMax[0]));
+            bounds.put("maxX", Math.max(bMin[0], bMax[0]));
+            bounds.put("minY", Math.min(bMin[1], bMax[1]));
+            bounds.put("maxY", Math.max(bMin[1], bMax[1]));
         }
 
         File transformed = File.createTempFile("transformed_", ".json");
         transformed.deleteOnExit();
         mapper.writerWithDefaultPrettyPrinter().writeValue(transformed, root);
         return transformed;
+    }
+
+    private double[] bakePoint(double x, double y,
+                               double cx, double cy, double scale, double offsetX, double offsetY,
+                               boolean swap, boolean invX, boolean invY,
+                               double mW, double mH, int rotation, double[] bounds,
+                               double alignOX, double alignOY) {
+        // 1. Apply overlay in raw content space
+        double ox = (x - cx) * scale + cx + offsetX;
+        double oy = (y - cy) * scale + cy + offsetY;
+
+        // 2. Forward transform to motor space (matching visualization)
+        double[] motor = CoordinateTransform.transformPoint(ox, oy, swap, invX, invY, mW, mH, rotation, bounds);
+        motor[0] += alignOX;
+        motor[1] += alignOY;
+
+        // 3. Inverse transform from motor space back to raw space
+        // The driver will forward-transform these coords (without alignment) to reach the motor position
+        return CoordinateTransform.inverseTransformPoint(motor[0], motor[1],
+                swap, invX, invY, mW, mH, rotation, bounds);
     }
 }

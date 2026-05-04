@@ -47,6 +47,44 @@ public class CoordinateTransform {
     }
 
     /**
+     * Inverse of transformPoint: motor coordinates back to logical input coordinates.
+     * Reverses: invertY -> invertX -> swap -> rotate(-θ)
+     */
+    public static double[] inverseTransformPoint(double x, double y,
+            boolean swapXY, boolean invertX, boolean invertY,
+            double maxX, double maxY,
+            int dataRotation, double[] contentBounds) {
+
+        // Reverse step 4: un-invert Y
+        if (invertY) y = maxY - y;
+
+        // Reverse step 3: un-invert X
+        if (invertX) x = maxX - x;
+
+        // Reverse step 2: un-swap
+        if (swapXY) {
+            double t = x; x = y; y = t;
+        }
+
+        // Reverse step 1: rotate by negative angle
+        if (dataRotation != 0 && contentBounds != null) {
+            double cx = (contentBounds[0] + contentBounds[1]) / 2.0;
+            double cy = (contentBounds[2] + contentBounds[3]) / 2.0;
+            double dx = x - cx, dy = y - cy;
+            int reverseRot = (360 - dataRotation) % 360;
+            switch (reverseRot) {
+                case 90:  { double t = dx; dx = -dy; dy = t; break; }
+                case 180: { dx = -dx; dy = -dy; break; }
+                case 270: { double t = dx; dx = dy; dy = -t; break; }
+            }
+            x = dx + cx;
+            y = dy + cy;
+        }
+
+        return new double[] { x, y };
+    }
+
+    /**
      * Calculate alignment offset to position content on the machine canvas.
      * Mirrors transforms.py calculate_alignment_offset.
      *
