@@ -28,10 +28,14 @@ See [docs/architecture.md](docs/architecture.md) for the full system specificati
 
 | Class | Role |
 |---|---|
-| `ProcessorService` | Core pipeline: layer identification, normalization, linearization, segmentation, refill insertion |
+| `ProcessorService` | Core pipeline: layer identification, normalization, linearization, segmentation, refill insertion. Supports no-refill mode (maxDist=0) for plain drawing. |
+| `ProcessorPanel` | Watercolor SVG processing tab with size/position controls and aspect ratio coupling |
+| `SvgDrawPanel` | Plain pen plotting tab (no refills). Machine/A5/A4/A3/Custom presets, auto-loads result in Plot tab. |
+| `PlotterPanel` | Driver process management, command construction, interactive positioning bake, console output |
+| `VisualizationPanel` | Digital twin rendering, origin-aware coordinate mapping, alignment preview, drag-to-move, handle-based resize |
 | `SettingsPanel` | Hardware configuration UI, Machine Origin logic, config save/load |
-| `VisualizationPanel` | Digital twin rendering, origin-aware coordinate mapping, alignment preview |
-| `PlotterPanel` | Driver process management, command construction, console output |
+| `SettingsDialog` | Modal wrapper for SettingsPanel (File > Settings or Ctrl+,) |
+| `CoordinateTransform` | Java-side coordinate transform utilities matching Python `transforms.py` |
 | `GeneralSettings` / `GcodeSettings` | Config POJOs for Jackson serialization |
 
 ### Python Modules

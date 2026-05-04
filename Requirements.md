@@ -58,7 +58,39 @@ The Machine Origin replaces the old manual invertX/invertY checkboxes with a sin
 
 This mapping is consistent across the Java GUI (SettingsPanel, VisualizationPanel) and the Python driver (transforms.py).
 
-## 6. Operational Requirements
+## 6. Draw SVG Mode (No-Refill)
+
+- **Purpose**: Plain pen plotting without watercolor refill logic.
+- **Processing**: When `maxDrawDistance <= 0`, the processor skips all refill insertion (no initial REFILL, no mid-stroke splits).
+- **UI**: Dedicated "Draw SVG" tab with SVG selection, size/position controls, and "Convert & Plot" button.
+- **Auto-Load**: Generated commands file is automatically loaded in the Plot tab and the UI switches to it.
+
+## 7. Explicit Size & Position
+
+- **Target Dimensions**: Width and height in mm. When both are specified, the drawing is scaled to fit within these dimensions.
+- **Aspect Ratio Lock**: Checkbox that couples width and height changes. Changing one dimension auto-computes the other.
+- **Position**: X and Y coordinates in mm for placing the drawing on the machine bed.
+- **Presets**: A5 (148x210), A4 (210x297), A3 (297x420), Machine (auto-fills machine bed dimensions), Custom.
+- **Available In**: Both Process SVG and Draw SVG tabs.
+
+## 8. Interactive Positioning (Visualization)
+
+- **Drag-to-Move**: Click and drag anywhere on the drawing content to reposition it on the machine bed.
+- **Handle-based Resize**: 8 handles (4 corners + 4 edge midpoints) on a dashed bounding box allow uniform scaling.
+- **Overlay Transform**: Applied in raw content space (before driver transform pipeline) for instant visual feedback without reprocessing.
+- **Screen-to-mm Inversion**: Uses finite-difference Jacobian approach to correctly convert screen pixel deltas to mm deltas for any origin/swap/rotation configuration.
+- **Transform Baking**: On plot start, overlay transform is baked into a temporary JSON copy by rewriting all MOVE/DRAW coordinates.
+- **Reset**: "Reset Position" button clears all drag/resize adjustments.
+- **WYSIWYG**: The visual position after drag/resize accurately represents where the plotter will draw.
+
+## 9. Robust SVG Parsing
+
+- **Primary Parser**: Apache Batik `SAXSVGDocumentFactory` for full SVG DOM support.
+- **Fallback Parser**: Generic `DocumentBuilderFactory` (namespace-aware) when Batik rejects non-standard elements.
+- **Trigger**: `DOMException` during initial SVG load triggers the fallback.
+- **Result**: SVGs with non-standard elements (e.g., `<plotdata>`, custom metadata) are processed successfully.
+
+## 10. Operational Requirements
 
 - **Persistence**: All settings (backend, origin, alignment, rotation, speeds, pen heights, stations, G-code parameters) are saved to `config.json` and restored on startup.
 - **Config Migration**: Old config files without `machineOrigin` are automatically migrated by inferring the origin from legacy `invertX`/`invertY` flags.
